@@ -4,6 +4,8 @@ import LearningPagesPage from "@/pages/LearningPagesPage";
 import SearchPage from "@/pages/SearchPage";
 import ProgressPage from "@/pages/ProgressPage";
 import NotesPage from "@/pages/NotesPage";
+import ResourcesPage from "@/pages/ResourcesPage";
+import AssessmentsPage from "@/pages/AssessmentsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import AiChatPage from "@/pages/AiChatPage";
 
@@ -17,6 +19,8 @@ export const IMPLEMENTED_MODULES: Record<string, () => JSX.Element> = {
   search: SearchPage,
   progress: ProgressPage,
   notes: NotesPage,
+  resources: ResourcesPage,
+  assessments: AssessmentsPage,
   settings: SettingsPage,
   "ai-chat": AiChatPage,
 };

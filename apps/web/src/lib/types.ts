@@ -29,6 +29,38 @@ export interface AiSettings {
   model: string;
 }
 
+export type ResourceType = "doc" | "article" | "video" | "course" | "book" | "other";
+
+export interface Resource {
+  id: string;
+  title: string;
+  url: string;
+  type: ResourceType;
+  createdAt: number;
+}
+
+export interface Question {
+  id: string;
+  prompt: string;
+  options: string[];
+  /** Indices of correct option(s). More than one ⇒ multiple-choice. */
+  correct: number[];
+}
+
+export interface Attempt {
+  at: number;
+  score: number;
+  total: number;
+}
+
+export interface Quiz {
+  id: string;
+  title: string;
+  questions: Question[];
+  attempts: Attempt[];
+  createdAt: number;
+}
+
 export interface AppData {
   version: 1;
   nodes: TreeNode[];
@@ -36,6 +68,10 @@ export interface AppData {
   pages: Record<string, string>;
   /** Single global markdown notebook (spec: Module 13 / 14). */
   notes: string;
+  /** Resource library (spec: Module 14). */
+  resources: Resource[];
+  /** MCQ assessments (spec: Module 9). */
+  quizzes: Quiz[];
   settings: AiSettings;
 }
 

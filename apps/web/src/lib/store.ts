@@ -1,5 +1,14 @@
 import { useSyncExternalStore } from "react";
-import type { AppData, AiSettings, TreeNode, NodeStatus } from "./types";
+import type {
+  AppData,
+  AiSettings,
+  TreeNode,
+  NodeStatus,
+  Resource,
+  ResourceType,
+  Quiz,
+  Question,
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // Local-first store. A single AppData object is persisted to localStorage and
@@ -14,6 +23,8 @@ const DEFAULT_DATA: AppData = {
   nodes: [],
   pages: {},
   notes: "",
+  resources: [],
+  quizzes: [],
   settings: { baseUrl: "", apiKey: "", model: "auto" },
 };
 
@@ -29,6 +40,8 @@ function load(): AppData {
       settings: { ...DEFAULT_DATA.settings, ...(parsed.settings ?? {}) },
       nodes: parsed.nodes ?? [],
       pages: parsed.pages ?? {},
+      resources: parsed.resources ?? [],
+      quizzes: parsed.quizzes ?? [],
     };
   } catch {
     return structuredClone(DEFAULT_DATA);
@@ -168,6 +181,61 @@ export function setPage(nodeId: string, markdown: string) {
 export function setNotes(notes: string) {
   setState((prev) => ({ ...prev, notes }));
 }
+
+// --- Resources --------------------------------------------------------------
+
+export const resources = {
+  add(input: { title: string; url: string; type: ResourceType }): Resource {
+    const r: Resource = {
+      id: uid(),
+      title: input.title.trim() || "Untitled",
+      url: input.url.trim(),
+      type: input.type,
+      createdAt: Date.now(),
+    };
+    setState((prev) => ({ ...prev, resources: [r, ...prev.resources] }));
+    return r;
+  },
+  remove(id: string) {
+    setState((prev) => ({
+      ...prev,
+      resources: prev.resources.filter((r) => r.id !== id),
+    }));
+  },
+};
+
+// --- Quizzes / assessments --------------------------------------------------
+
+export const quizzes = {
+  add(title: string, questions: Question[]): Quiz {
+    const q: Quiz = {
+      id: uid(),
+      title: title.trim() || "Untitled quiz",
+      questions,
+      attempts: [],
+      createdAt: Date.now(),
+    };
+    setState((prev) => ({ ...prev, quizzes: [q, ...prev.quizzes] }));
+    return q;
+  },
+  remove(id: string) {
+    setState((prev) => ({
+      ...prev,
+      quizzes: prev.quizzes.filter((q) => q.id !== id),
+    }));
+  },
+  recordAttempt(id: string, score: number, total: number) {
+    setState((prev) => ({
+      ...prev,
+      quizzes: prev.quizzes.map((q) =>
+        q.id === id
+          ? { ...q, attempts: [...q.attempts, { at: Date.now(), score, total }] }
+          : q
+      ),
+    }));
+  },
+  newQuestionId: () => uid(),
+};
 
 // --- Settings ---------------------------------------------------------------
 

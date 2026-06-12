@@ -111,3 +111,17 @@ Firebase login (KH-006).
 ### Risks
 - R2 may request a payment method on enable; guide notes a no-card S3 alternative (Supabase) to switch to.
 - Litestream version pin (0.3.13) — bump if image tag missing.
+
+## 2026-06-13 — Session F (Assessments + Resources)
+### Contributor: Claude Code (Opus 4.8)
+### Completed
+- Data layer: `resources` + `quizzes` (types + store helpers `resources.*`, `quizzes.*`).
+- Resources (KH-019): add/list/filter (doc/article/video/course/book/other), open, delete.
+- Assessments (KH-013): create MCQ quizzes (single & multiple correct), take with
+  radio/checkbox UI, auto-score, per-question right/wrong review, attempt history + best %.
+- Registered both in moduleRegistry. Build green (~115 kB gz).
+### Status
+9/11 modules functional client-side. Remaining placeholders: knowledge-graph, repository.
+### Next
+- KH-020 Knowledge Graph visualization (React Flow or lightweight SVG).
+- KH-006 Firebase Google login. KH-008 GitHub sync (repository module).
