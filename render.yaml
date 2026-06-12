@@ -23,11 +23,14 @@ services:
       # --- Secrets: set these in the Render dashboard (sync:false = not in repo) ---
       - key: ENCRYPTION_KEY            # openssl rand -hex 32 (generate once, keep stable)
         sync: false
-      - key: R2_ENDPOINT              # https://<accountid>.r2.cloudflarestorage.com
+      # S3-compatible object store for Litestream backups (Filebase = no card).
+      - key: S3_ENDPOINT              # Filebase: https://s3.filebase.com
         sync: false
-      - key: R2_BUCKET                # e.g. knowhub-freellmapi
+      - key: S3_BUCKET                # bucket name, e.g. knowhub-freellmapi
         sync: false
-      - key: LITESTREAM_ACCESS_KEY_ID # R2 API token Access Key ID
+      - key: S3_REGION                # Filebase: us-east-1
         sync: false
-      - key: LITESTREAM_SECRET_ACCESS_KEY # R2 API token Secret Access Key
+      - key: LITESTREAM_ACCESS_KEY_ID # S3 access key id
+        sync: false
+      - key: LITESTREAM_SECRET_ACCESS_KEY # S3 secret access key
         sync: false

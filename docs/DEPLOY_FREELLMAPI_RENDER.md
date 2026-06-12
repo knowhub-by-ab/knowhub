@@ -1,10 +1,21 @@
-# Host FreeLLMAPI free 24/7 on Render (no card) — with Litestream + R2
+# Host FreeLLMAPI free 24/7 on Render (no card) — with Litestream + Filebase
+
+> **Heads-up / recommendation.** This is the "I really want full FreeLLMAPI"
+> path. It works with **no credit card**, but it's several moving parts. If you
+> just want the AI Tutor working reliably with no card and no fuss, use KnowHub's
+> **built-in backend** instead — see [AI_BACKEND_SETUP.md](./AI_BACKEND_SETUP.md)
+> (add a free Gemini key, done). KnowHub already falls back to it automatically.
 
 This runs the **real FreeLLMAPI** (its dashboard, catalog, analytics, routing)
 online for free, no credit card. The trick: Render's free disk is wiped on
 restarts, so **Litestream** continuously backs up FreeLLMAPI's database to a
-free **Cloudflare R2** bucket and restores it on boot. **UptimeRobot** pings the
-app so it never sleeps.
+free **Filebase** bucket (5 GB, S3-compatible, no card, never pauses) and
+restores it on boot. **UptimeRobot** pings the app so it never sleeps.
+
+> **Why Filebase?** Cloudflare R2 now needs a card; Supabase free projects pause
+> after a week idle. Filebase gives 5 GB of standard S3 storage with no card and
+> no pausing — ideal for SQLite/Litestream backups. The config uses generic `S3_*`
+> vars, so you can point at R2/B2/Storj/Tigris later by just changing them.
 
 KnowHub uses this as the **primary** AI; if it's ever down, KnowHub automatically
 falls back to its built-in `/api/chat` backend (your own provider keys). So you
@@ -18,17 +29,19 @@ Time: ~30–40 minutes. Have the [AI keys guide](./AI_BACKEND_SETUP.md) handy fo
 
 ---
 
-## Step 1 — Create a Cloudflare R2 bucket (storage for the database backup)
-1. Go to **https://dash.cloudflare.com → R2**.
-2. If prompted, **enable R2** (free tier; if it insists on a payment method and you
-   have none, see "No-card storage alternative" at the bottom).
-3. **Create bucket** → name it `knowhub-freellmapi` → **Create**.
-4. Note your **Account ID** (right sidebar on the R2 overview). Your S3 endpoint is:
-   `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
-5. **Manage R2 API Tokens → Create API token**:
-   - Permissions: **Object Read & Write**
-   - (Optionally scope to the one bucket)
-   - **Create**. Copy the **Access Key ID** and **Secret Access Key** (shown once).
+## Step 1 — Create a Filebase bucket (no card)
+1. Go to **https://filebase.com** → **Sign up** (free, no credit card).
+2. Verify your email and log in to the Filebase console.
+3. **Buckets → Create Bucket**:
+   - **Name:** `knowhub-freellmapi` (bucket names are global — if taken, add a suffix)
+   - **Storage network:** choose **Storj** (good for frequent small writes; avoid IPFS
+     here since Litestream overwrites/deletes objects often).
+   - **Create**.
+4. Left sidebar → **Access Keys**. Filebase shows your **Key** (Access Key ID) and
+   **Secret** (Secret Access Key) — copy both.
+5. Your S3 settings are fixed for Filebase:
+   - **Endpoint:** `https://s3.filebase.com`
+   - **Region:** `us-east-1`
 
 ---
 
@@ -48,10 +61,11 @@ Time: ~30–40 minutes. Have the [AI keys guide](./AI_BACKEND_SETUP.md) handy fo
    | Variable | Value |
    | --- | --- |
    | `ENCRYPTION_KEY` | a 64-char hex string — generate one (see below) and **keep it forever** |
-   | `R2_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
-   | `R2_BUCKET` | `knowhub-freellmapi` |
-   | `LITESTREAM_ACCESS_KEY_ID` | the R2 Access Key ID from Step 1 |
-   | `LITESTREAM_SECRET_ACCESS_KEY` | the R2 Secret Access Key from Step 1 |
+   | `S3_ENDPOINT` | `https://s3.filebase.com` |
+   | `S3_BUCKET` | `knowhub-freellmapi` (your bucket name from Step 1.3) |
+   | `S3_REGION` | `us-east-1` |
+   | `LITESTREAM_ACCESS_KEY_ID` | the Filebase **Key** from Step 1.4 |
+   | `LITESTREAM_SECRET_ACCESS_KEY` | the Filebase **Secret** from Step 1.4 |
 
    **Generate ENCRYPTION_KEY** — on any machine with Node, or use an online hex
    generator for 32 bytes (64 hex chars). On your PC:
@@ -103,15 +117,22 @@ Because of Litestream, all of this now survives restarts.
 ## Maintenance
 - **Updating FreeLLMAPI:** Render → your service → **Manual Deploy → Clear build cache &
   deploy** (re-pulls `:latest`). Your data restores from R2.
-- **Costs:** Render free web service, Cloudflare R2 free tier, UptimeRobot free — all $0.
+- **Costs:** Render free web service, Filebase free 5 GB, UptimeRobot free — all $0, no card.
 - **First request after idle** can be slow if UptimeRobot ever misses; just retry.
+- **Filebase never pauses** and 5 GB is far more than this DB needs, so backups just keep
+  working with no upkeep.
 
 ## Troubleshooting
 - **Build fails pulling the image:** re-run the deploy; GHCR can be momentarily slow.
-- **Data didn't persist after restart:** check the R2 env vars and that the bucket exists;
-  view Render **Logs** for `litestream` lines (restore/replicate).
+- **Data didn't persist after restart:** check the `S3_*` env vars and that the bucket
+  exists; view Render **Logs** for `litestream` lines (restore/replicate). For Filebase the
+  endpoint is exactly `https://s3.filebase.com` and region `us-east-1`.
+- **Litestream auth errors:** make sure you used the Filebase **Access Key** + **Secret**
+  (from Access Keys), not your account login.
+- **Slow/erroring writes on Filebase:** if you picked the **IPFS** network, recreate the
+  bucket on **Storj** (IPFS is content-addressed and ill-suited to Litestream's frequent
+  overwrites/deletes).
 - **AI Tutor errors but fallback works:** FreeLLMAPI may be asleep/restarting — UptimeRobot
   should prevent this; confirm the monitor is active.
-- **No-card storage alternative:** if R2 demands a payment method, Litestream also supports
-  other S3-compatible stores. Tell me and I'll switch `litestream.yml` to a no-card option
-  (e.g. Supabase Storage's S3 endpoint).
+- **Other no-card stores:** the generic `S3_*` vars also work with Tigris, Storj (direct),
+  Backblaze B2, self-hosted MinIO, etc. Tell me your pick and I'll note the exact values.

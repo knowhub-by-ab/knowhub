@@ -1,15 +1,16 @@
-# Litestream config. Replicates the FreeLLMAPI SQLite DB to a Cloudflare R2
-# (S3-compatible) bucket. Values come from environment variables set on Render.
-# Litestream expands ${VAR} references at runtime.
+# Litestream config. Replicates the FreeLLMAPI SQLite DB to any S3-compatible
+# object store. Defaults target Filebase (5 GB free, no credit card, never pauses),
+# but the same vars work for Cloudflare R2, Backblaze B2, Storj, Tigris, MinIO, etc.
+# Values come from environment variables set on Render; Litestream expands ${VAR}.
 
 dbs:
   - path: /app/server/data/freeapi.db
     replicas:
       - type: s3
-        endpoint: ${R2_ENDPOINT}            # https://<accountid>.r2.cloudflarestorage.com
-        bucket: ${R2_BUCKET}                # e.g. knowhub-freellmapi
+        endpoint: ${S3_ENDPOINT}            # Filebase: https://s3.filebase.com
+        bucket: ${S3_BUCKET}                # the bucket name, e.g. knowhub-freellmapi
         path: freeapi                       # folder inside the bucket
-        region: auto
+        region: ${S3_REGION}                # Filebase: us-east-1
         force-path-style: true
         access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
         secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
