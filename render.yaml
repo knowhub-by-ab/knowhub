@@ -24,11 +24,11 @@ services:
       - key: ENCRYPTION_KEY            # openssl rand -hex 32 (generate once, keep stable)
         sync: false
       # S3-compatible object store for Litestream backups (Filebase = no card).
-      - key: S3_ENDPOINT              # Filebase: https://s3.filebase.com
+      - key: S3_ENDPOINT              # Filebase: https://s3.filebase.io
         sync: false
       - key: S3_BUCKET                # bucket name, e.g. knowhub-freellmapi
         sync: false
-      - key: S3_REGION                # Filebase: us-east-1
+      - key: S3_REGION                # Filebase: auto
         sync: false
       - key: LITESTREAM_ACCESS_KEY_ID # S3 access key id
         sync: false

@@ -7,10 +7,10 @@ dbs:
   - path: /app/server/data/freeapi.db
     replicas:
       - type: s3
-        endpoint: ${S3_ENDPOINT}            # Filebase: https://s3.filebase.com
+        endpoint: ${S3_ENDPOINT}            # Filebase: https://s3.filebase.io
         bucket: ${S3_BUCKET}                # the bucket name, e.g. knowhub-freellmapi
         path: freeapi                       # folder inside the bucket
-        region: ${S3_REGION}                # Filebase: us-east-1
+        region: ${S3_REGION}                # Filebase: auto
         force-path-style: true
         access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
         secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}

@@ -40,8 +40,8 @@ Time: ~30–40 minutes. Have the [AI keys guide](./AI_BACKEND_SETUP.md) handy fo
 4. Left sidebar → **Access Keys**. Filebase shows your **Key** (Access Key ID) and
    **Secret** (Secret Access Key) — copy both.
 5. Your S3 settings are fixed for Filebase:
-   - **Endpoint:** `https://s3.filebase.com`
-   - **Region:** `us-east-1`
+   - **Endpoint:** `https://s3.filebase.io`
+   - **Region:** `auto`
 
 ---
 
@@ -61,9 +61,9 @@ Time: ~30–40 minutes. Have the [AI keys guide](./AI_BACKEND_SETUP.md) handy fo
    | Variable | Value |
    | --- | --- |
    | `ENCRYPTION_KEY` | a 64-char hex string — generate one (see below) and **keep it forever** |
-   | `S3_ENDPOINT` | `https://s3.filebase.com` |
+   | `S3_ENDPOINT` | `https://s3.filebase.io` |
    | `S3_BUCKET` | `knowhub-freellmapi` (your bucket name from Step 1.3) |
-   | `S3_REGION` | `us-east-1` |
+   | `S3_REGION` | `auto` |
    | `LITESTREAM_ACCESS_KEY_ID` | the Filebase **Key** from Step 1.4 |
    | `LITESTREAM_SECRET_ACCESS_KEY` | the Filebase **Secret** from Step 1.4 |
 
@@ -126,7 +126,7 @@ Because of Litestream, all of this now survives restarts.
 - **Build fails pulling the image:** re-run the deploy; GHCR can be momentarily slow.
 - **Data didn't persist after restart:** check the `S3_*` env vars and that the bucket
   exists; view Render **Logs** for `litestream` lines (restore/replicate). For Filebase the
-  endpoint is exactly `https://s3.filebase.com` and region `us-east-1`.
+  endpoint is exactly `https://s3.filebase.io` and region `auto`.
 - **Litestream auth errors:** make sure you used the Filebase **Access Key** + **Secret**
   (from Access Keys), not your account login.
 - **Slow/erroring writes on Filebase:** if you picked the **IPFS** network, recreate the
