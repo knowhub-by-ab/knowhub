@@ -90,7 +90,25 @@ export async function chatCompletion(
   settings: AiSettings,
   messages: ChatMessage[]
 ): Promise<string> {
-  return settings.baseUrl.trim()
-    ? chatViaExternal(settings, messages)
-    : chatViaBuiltIn(settings, messages);
+  // No external endpoint configured → use the built-in backend directly.
+  if (!settings.baseUrl.trim()) return chatViaBuiltIn(settings, messages);
+
+  // External endpoint (e.g. self-hosted FreeLLMAPI) is the PRIMARY. If it fails
+  // (down, rate-limited, CORS, quota), automatically fall back to the built-in
+  // multi-key backend so the tutor keeps working.
+  try {
+    return await chatViaExternal(settings, messages);
+  } catch (primaryErr) {
+    try {
+      return await chatViaBuiltIn(settings, messages);
+    } catch (fallbackErr) {
+      throw new AiError(
+        `Primary AI (FreeLLMAPI) failed: ${
+          primaryErr instanceof Error ? primaryErr.message : "unknown"
+        } — and fallback also failed: ${
+          fallbackErr instanceof Error ? fallbackErr.message : "unknown"
+        }`
+      );
+    }
+  }
 }

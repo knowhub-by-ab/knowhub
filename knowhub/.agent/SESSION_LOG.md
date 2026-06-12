@@ -85,3 +85,29 @@ Remaining placeholders: knowledge-graph, assessments, resources, repository.
 KH-013 MCQ assessments (client-side) or KH-006 Firebase login (after user does MANUAL_STEPS B).
 ### Risks
 - JS bundle growing (marked+minisearch). Consider code-splitting (KH-007-fe) later.
+
+## 2026-06-13 — Session E (AI hosting: FreeLLMAPI on Render + fallback)
+### Contributor: Claude Code (Opus 4.8)
+### Context / Decision
+- User has NO payment card → Oracle/Fly ruled out. User chose: host real FreeLLMAPI on
+  Render free tier with Litestream→Cloudflare R2 persistence + UptimeRobot keep-alive,
+  AND keep the built-in Pages Function (their own multi-provider keys) as automatic fallback.
+### Completed
+- `infrastructure/freellmapi-render/`: Dockerfile (wraps published FreeLLMAPI image + copies
+  Litestream binary), `litestream.yml` (replicate freeapi.db → R2), `entrypoint.sh`
+  (restore-then-replicate -exec node server).
+- `render.yaml` blueprint: free Docker web service, HOST=0.0.0.0, DASHBOARD_ORIGINS,
+  health check /api/ping, secrets (ENCRYPTION_KEY, R2_*) as sync:false.
+- Frontend `ai.ts`: external endpoint = PRIMARY, auto-fallback to built-in `/api/chat` on
+  failure; combined error if both fail.
+- `docs/DEPLOY_FREELLMAPI_RENDER.md`: full beginner guide (R2 bucket + token, Render
+  Blueprint, env vars, FreeLLMAPI setup, UptimeRobot, KnowHub Settings, fallback wiring).
+### Current Status
+Build green. AI architecture: FreeLLMAPI (Render) primary + Pages Function fallback.
+All deploy artifacts in repo; remaining work for user is the manual Render/R2/UptimeRobot setup.
+### Next Recommended Step
+After AI is wired: resume features — Assessments (MCQ), Knowledge Graph, Resources; then
+Firebase login (KH-006).
+### Risks
+- R2 may request a payment method on enable; guide notes a no-card S3 alternative (Supabase) to switch to.
+- Litestream version pin (0.3.13) — bump if image tag missing.

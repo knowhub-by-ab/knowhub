@@ -1,0 +1,33 @@
+# Render Blueprint — deploys FreeLLMAPI (+ Litestream → R2) as a free 24/7 web
+# service. Create it on Render via "New + → Blueprint" pointed at this repo.
+# Full walkthrough: docs/DEPLOY_FREELLMAPI_RENDER.md
+
+services:
+  - type: web
+    name: knowhub-freellmapi
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./infrastructure/freellmapi-render/Dockerfile
+    dockerContext: ./infrastructure/freellmapi-render
+    healthCheckPath: /api/ping
+    autoDeploy: false
+    envVars:
+      # Render injects PORT automatically; FreeLLMAPI reads it.
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_ENV
+        value: production
+      - key: DASHBOARD_ORIGINS
+        value: https://knowhub-ai.pages.dev,http://localhost:5173
+      # --- Secrets: set these in the Render dashboard (sync:false = not in repo) ---
+      - key: ENCRYPTION_KEY            # openssl rand -hex 32 (generate once, keep stable)
+        sync: false
+      - key: R2_ENDPOINT              # https://<accountid>.r2.cloudflarestorage.com
+        sync: false
+      - key: R2_BUCKET                # e.g. knowhub-freellmapi
+        sync: false
+      - key: LITESTREAM_ACCESS_KEY_ID # R2 API token Access Key ID
+        sync: false
+      - key: LITESTREAM_SECRET_ACCESS_KEY # R2 API token Secret Access Key
+        sync: false

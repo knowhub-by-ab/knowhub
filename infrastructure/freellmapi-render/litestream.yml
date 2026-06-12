@@ -1,0 +1,15 @@
+# Litestream config. Replicates the FreeLLMAPI SQLite DB to a Cloudflare R2
+# (S3-compatible) bucket. Values come from environment variables set on Render.
+# Litestream expands ${VAR} references at runtime.
+
+dbs:
+  - path: /app/server/data/freeapi.db
+    replicas:
+      - type: s3
+        endpoint: ${R2_ENDPOINT}            # https://<accountid>.r2.cloudflarestorage.com
+        bucket: ${R2_BUCKET}                # e.g. knowhub-freellmapi
+        path: freeapi                       # folder inside the bucket
+        region: auto
+        force-path-style: true
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
