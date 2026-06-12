@@ -1,0 +1,19 @@
+{
+  "name": "knowhub",
+  "private": true,
+  "version": "0.1.0",
+  "description": "KnowHub — AI-powered, GitHub-native Personal Learning Operating System",
+  "license": "MIT",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web",
+    "preview": "npm run preview -w apps/web",
+    "lint": "npm run lint -w apps/web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

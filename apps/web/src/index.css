@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+}
+
+/* Subtle gradient backdrop used across the app */
+.bg-aurora {
+  background:
+    radial-gradient(60rem 60rem at 70% -10%, rgba(124, 58, 237, 0.25), transparent 60%),
+    radial-gradient(50rem 50rem at 0% 20%, rgba(139, 92, 246, 0.18), transparent 55%),
+    #020617;
+}
+
+::selection {
+  background: rgba(124, 58, 237, 0.4);
+}
