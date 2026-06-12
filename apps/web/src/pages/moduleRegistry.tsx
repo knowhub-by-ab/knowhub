@@ -1,0 +1,16 @@
+import type { JSX } from "react";
+import LearningTreePage from "@/pages/LearningTreePage";
+import NotesPage from "@/pages/NotesPage";
+import SettingsPage from "@/pages/SettingsPage";
+import AiChatPage from "@/pages/AiChatPage";
+
+/**
+ * Maps a module id to its implemented page. Modules not listed here fall back
+ * to the on-roadmap placeholder. Add an entry as each module is built.
+ */
+export const IMPLEMENTED_MODULES: Record<string, () => JSX.Element> = {
+  "learning-tree": LearningTreePage,
+  notes: NotesPage,
+  settings: SettingsPage,
+  "ai-chat": AiChatPage,
+};

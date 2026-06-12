@@ -1,15 +1,21 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Github, Info } from "lucide-react";
 import { MODULES } from "@/lib/modules";
-
-const STATS = [
-  { label: "Nodes completed", value: "—", hint: "Connect a repo to begin" },
-  { label: "Trees", value: "—", hint: "Create your first learning tree" },
-  { label: "Assessments taken", value: "—", hint: "Test your knowledge" },
-  { label: "Career readiness", value: "—", hint: "Pick a roadmap" },
-];
+import { summarizeProgress, tree, useAppData } from "@/lib/store";
 
 export default function DashboardPage() {
+  const data = useAppData();
+  const p = summarizeProgress(data.nodes);
+  const topics = tree.childrenOf(data.nodes, null).length;
+  const noteWords = data.notes.trim() ? data.notes.trim().split(/\s+/).length : 0;
+
+  const STATS = [
+    { label: "Topics", value: String(topics), hint: "Top-level learning topics" },
+    { label: "Total nodes", value: String(p.total), hint: "Across your whole tree" },
+    { label: "Completed", value: String(p.completed), hint: `${p.percent}% of all nodes` },
+    { label: "Note words", value: String(noteWords), hint: "In your global notebook" },
+  ];
+
   return (
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">

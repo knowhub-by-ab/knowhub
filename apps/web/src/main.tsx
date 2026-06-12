@@ -8,6 +8,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import ModulePlaceholderPage from "@/pages/ModulePlaceholderPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import { MODULES } from "@/lib/modules";
+import { IMPLEMENTED_MODULES } from "@/pages/moduleRegistry";
 
 const router = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
@@ -16,10 +17,13 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { index: true, element: <DashboardPage /> },
-      ...MODULES.map((m) => ({
-        path: m.path.replace(/^\/app\//, ""),
-        element: <ModulePlaceholderPage moduleId={m.id} />,
-      })),
+      ...MODULES.map((m) => {
+        const Impl = IMPLEMENTED_MODULES[m.id];
+        return {
+          path: m.path.replace(/^\/app\//, ""),
+          element: Impl ? <Impl /> : <ModulePlaceholderPage moduleId={m.id} />,
+        };
+      }),
     ],
   },
   { path: "*", element: <NotFoundPage /> },
