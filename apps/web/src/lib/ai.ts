@@ -1,8 +1,9 @@
 import type { AiSettings, ChatMessage } from "./types";
 
-// Minimal OpenAI-compatible chat client. Talks directly to a FreeLLMAPI
-// instance (or any OpenAI-compatible endpoint) configured in Settings.
-// Non-streaming for simplicity in Phase 2.
+// AI client. By default KnowHub talks to its OWN built-in backend — the
+// Cloudflare Pages Function at /api/chat (multi-provider, configured with keys
+// in the Pages project). Advanced users can override this in Settings by
+// entering an external OpenAI-compatible endpoint (e.g. a self-hosted FreeLLMAPI).
 
 export class AiError extends Error {}
 
@@ -12,16 +13,46 @@ function joinUrl(base: string, path: string): string {
   return `${b}/${p}`;
 }
 
-export async function chatCompletion(
+/** Built-in backend: same-origin Pages Function. */
+async function chatViaBuiltIn(
   settings: AiSettings,
   messages: ChatMessage[]
 ): Promise<string> {
-  if (!settings.baseUrl.trim()) {
+  let res: Response;
+  try {
+    res = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // Used as the optional AI_GATE_KEY if one is configured.
+        ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {}),
+      },
+      body: JSON.stringify({ messages, model: settings.model || "auto" }),
+    });
+  } catch (err) {
     throw new AiError(
-      "No AI endpoint configured. Add your FreeLLMAPI URL in Settings."
+      `Could not reach KnowHub's AI backend. ${err instanceof Error ? err.message : ""}`
     );
   }
+  const data = (await res.json().catch(() => ({}))) as {
+    content?: string;
+    error?: string;
+  };
+  if (!res.ok) {
+    throw new AiError(
+      data.error ??
+        `AI request failed (${res.status}). The AI backend may not have a provider key configured yet.`
+    );
+  }
+  if (!data.content) throw new AiError("AI returned an empty response.");
+  return data.content;
+}
 
+/** External OpenAI-compatible endpoint (advanced override). */
+async function chatViaExternal(
+  settings: AiSettings,
+  messages: ChatMessage[]
+): Promise<string> {
   let res: Response;
   try {
     res = await fetch(joinUrl(settings.baseUrl, "chat/completions"), {
@@ -43,16 +74,23 @@ export async function chatCompletion(
       }`
     );
   }
-
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new AiError(`AI request failed (${res.status}). ${text.slice(0, 300)}`);
   }
-
   const data = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
   };
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new AiError("AI returned an empty response.");
   return content;
+}
+
+export async function chatCompletion(
+  settings: AiSettings,
+  messages: ChatMessage[]
+): Promise<string> {
+  return settings.baseUrl.trim()
+    ? chatViaExternal(settings, messages)
+    : chatViaBuiltIn(settings, messages);
 }

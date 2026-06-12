@@ -28,9 +28,15 @@ export default function SettingsPage() {
       </div>
 
       <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <h2 className="font-semibold text-white">AI Provider (FreeLLMAPI)</h2>
+        <h2 className="font-semibold text-white">AI Provider</h2>
         <p className="mt-1 text-sm text-slate-400">
-          KnowHub's AI Tutor calls any OpenAI-compatible endpoint. Point it at your{" "}
+          By default the AI Tutor uses <strong>KnowHub's built-in backend</strong> — just
+          add a provider key in your Cloudflare Pages project settings. Leave the fields
+          below <strong>blank</strong> to use it.
+        </p>
+        <p className="mt-2 text-sm text-slate-400">
+          <em>Advanced (optional):</em> to use your own endpoint instead — e.g. a
+          self-hosted{" "}
           <a
             href="https://github.com/tashfeenahmed/freellmapi"
             target="_blank"
@@ -39,7 +45,7 @@ export default function SettingsPage() {
           >
             FreeLLMAPI <ExternalLink className="h-3 w-3" />
           </a>{" "}
-          instance.
+          — enter its URL below.
         </p>
 
         <label className="mt-5 block text-sm font-medium text-slate-300">

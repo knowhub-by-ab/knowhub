@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { MessagesSquare, Send, Loader2, Settings as SettingsIcon } from "lucide-react";
+import { MessagesSquare, Send, Loader2 } from "lucide-react";
 import { useAppData } from "@/lib/store";
 import { chatCompletion, AiError } from "@/lib/ai";
 import type { ChatMessage } from "@/lib/types";
@@ -19,7 +18,9 @@ export default function AiChatPage() {
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  const configured = data.settings.baseUrl.trim().length > 0;
+  // Built-in backend (/api/chat) is always available; an external endpoint is optional.
+  const configured = true;
+  const usingExternal = data.settings.baseUrl.trim().length > 0;
 
   async function send() {
     const text = input.trim();
@@ -49,19 +50,12 @@ export default function AiChatPage() {
         </span>
         <div>
           <h1 className="text-2xl font-bold text-white">AI Tutor</h1>
-          <p className="text-sm text-slate-400">Ask anything. Powered by FreeLLMAPI.</p>
+          <p className="text-sm text-slate-400">
+            Ask anything.{" "}
+            {usingExternal ? "Using your custom endpoint." : "Powered by KnowHub's AI backend."}
+          </p>
         </div>
       </div>
-
-      {!configured && (
-        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-          No AI endpoint configured yet. Add your FreeLLMAPI URL in{" "}
-          <Link to="/app/settings" className="inline-flex items-center gap-1 font-medium underline">
-            <SettingsIcon className="h-3.5 w-3.5" /> Settings
-          </Link>
-          .
-        </div>
-      )}
 
       <div className="mt-4 flex-1 space-y-4 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-4">
         {messages.length === 0 ? (
