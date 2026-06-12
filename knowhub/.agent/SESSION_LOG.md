@@ -125,3 +125,16 @@ Firebase login (KH-006).
 ### Next
 - KH-020 Knowledge Graph visualization (React Flow or lightweight SVG).
 - KH-006 Firebase Google login. KH-008 GitHub sync (repository module).
+
+## 2026-06-13 — Session G (Knowledge Graph)
+### Contributor: Claude Code (Opus 4.8)
+### Completed
+- KH-020 Knowledge Graph: dependency-free SVG visualization of the tree — layered
+  layout (depth columns, leaf-balanced y), curved parent→child edges, status-colored
+  nodes, legend + stats. Registered in moduleRegistry.
+### Status
+10/11 modules functional client-side. Remaining: **repository** (GitHub sync) — needs
+GitHub OAuth app + a backend token exchange + Firebase login; account-based, next phase.
+### Next
+- KH-006 Firebase Google login (build gated UI; activates when user adds Firebase env).
+- KH-008 GitHub OAuth + repo connect/sync (Repository module) via Pages Function.
