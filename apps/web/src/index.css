@@ -25,3 +25,30 @@ body {
 ::selection {
   background: rgba(124, 58, 237, 0.4);
 }
+
+/* Minimal Markdown preview styling (no typography plugin dependency). */
+.md-prose {
+  @apply text-sm leading-relaxed text-slate-200;
+}
+.md-prose h1 { @apply mb-3 mt-5 text-2xl font-bold text-white; }
+.md-prose h2 { @apply mb-2 mt-5 text-xl font-semibold text-white; }
+.md-prose h3 { @apply mb-2 mt-4 text-lg font-semibold text-white; }
+.md-prose p { @apply my-3; }
+.md-prose ul { @apply my-3 list-disc pl-6; }
+.md-prose ol { @apply my-3 list-decimal pl-6; }
+.md-prose li { @apply my-1; }
+.md-prose a { @apply text-brand-300 underline; }
+.md-prose code {
+  @apply rounded bg-white/10 px-1.5 py-0.5 font-mono text-[0.85em] text-brand-200;
+}
+.md-prose pre {
+  @apply my-4 overflow-x-auto rounded-xl border border-white/10 bg-slate-900/80 p-4;
+}
+.md-prose pre code { @apply bg-transparent p-0 text-slate-200; }
+.md-prose blockquote {
+  @apply my-4 border-l-2 border-brand-500/50 pl-4 italic text-slate-400;
+}
+.md-prose table { @apply my-4 w-full border-collapse text-left; }
+.md-prose th, .md-prose td { @apply border border-white/10 px-3 py-1.5; }
+.md-prose hr { @apply my-6 border-white/10; }
+.md-prose strong { @apply font-semibold text-white; }

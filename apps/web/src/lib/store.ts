@@ -12,6 +12,7 @@ const STORAGE_KEY = "knowhub:data:v1";
 const DEFAULT_DATA: AppData = {
   version: 1,
   nodes: [],
+  pages: {},
   notes: "",
   settings: { baseUrl: "", apiKey: "", model: "auto" },
 };
@@ -27,6 +28,7 @@ function load(): AppData {
       ...parsed,
       settings: { ...DEFAULT_DATA.settings, ...(parsed.settings ?? {}) },
       nodes: parsed.nodes ?? [],
+      pages: parsed.pages ?? {},
     };
   } catch {
     return structuredClone(DEFAULT_DATA);
@@ -125,7 +127,13 @@ export const tree = {
           }
         }
       }
-      return { ...prev, nodes: prev.nodes.filter((n) => !toRemove.has(n.id)) };
+      const pages = { ...prev.pages };
+      for (const rid of toRemove) delete pages[rid];
+      return {
+        ...prev,
+        nodes: prev.nodes.filter((n) => !toRemove.has(n.id)),
+        pages,
+      };
     });
   },
 
@@ -134,7 +142,26 @@ export const tree = {
       .filter((n) => n.parentId === parentId)
       .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
   },
+
+  /** Depth-first flatten in display order, annotated with depth. */
+  flatten(nodes: TreeNode[]): { node: TreeNode; depth: number }[] {
+    const out: { node: TreeNode; depth: number }[] = [];
+    const walk = (parentId: string | null, depth: number) => {
+      for (const node of tree.childrenOf(nodes, parentId)) {
+        out.push({ node, depth });
+        walk(node.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  },
 };
+
+// --- Learning pages ---------------------------------------------------------
+
+export function setPage(nodeId: string, markdown: string) {
+  setState((prev) => ({ ...prev, pages: { ...prev.pages, [nodeId]: markdown } }));
+}
 
 // --- Notes ------------------------------------------------------------------
 

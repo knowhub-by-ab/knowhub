@@ -32,6 +32,8 @@ export interface AiSettings {
 export interface AppData {
   version: 1;
   nodes: TreeNode[];
+  /** Markdown learning page per node, keyed by node id (spec: Module 5). */
+  pages: Record<string, string>;
   /** Single global markdown notebook (spec: Module 13 / 14). */
   notes: string;
   settings: AiSettings;

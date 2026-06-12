@@ -1,5 +1,8 @@
 import type { JSX } from "react";
 import LearningTreePage from "@/pages/LearningTreePage";
+import LearningPagesPage from "@/pages/LearningPagesPage";
+import SearchPage from "@/pages/SearchPage";
+import ProgressPage from "@/pages/ProgressPage";
 import NotesPage from "@/pages/NotesPage";
 import SettingsPage from "@/pages/SettingsPage";
 import AiChatPage from "@/pages/AiChatPage";
@@ -10,6 +13,9 @@ import AiChatPage from "@/pages/AiChatPage";
  */
 export const IMPLEMENTED_MODULES: Record<string, () => JSX.Element> = {
   "learning-tree": LearningTreePage,
+  "learning-pages": LearningPagesPage,
+  search: SearchPage,
+  progress: ProgressPage,
   notes: NotesPage,
   settings: SettingsPage,
   "ai-chat": AiChatPage,

@@ -62,3 +62,26 @@ KH-006 Firebase Google auth, or KH-011 markdown learning pages + KH-013 assessme
 ### Risks
 - AI Tutor needs the user's FreeLLMAPI to allow this origin (CORS / DASHBOARD_ORIGINS).
 - Data is browser-local until GitHub sync lands (no cross-device yet).
+
+## 2026-06-13 — Session D (KnowHub Phase 3 — Pages, Search, Progress + manual guide)
+### Contributor: Claude Code (Opus 4.8)
+### Completed
+- Deps: `marked`, `dompurify`, `minisearch`. Added `src/lib/markdown.ts` (sanitized render).
+- Data layer: `pages: Record<nodeId,string>` + `setPage`, `tree.flatten`, page cleanup on delete.
+- Learning Pages (KH-011): per-node markdown editor + live preview tabs, autosave, node picker.
+- Search (KH-012): MiniSearch over topics/pages/notes, prefix+fuzzy, links to source.
+- Progress (KH-015): overall % bar + per-top-level-topic breakdown.
+- Registered all three in `moduleRegistry.tsx`.
+- Wrote `docs/MANUAL_STEPS.md` — full beginner walkthrough for FreeLLMAPI/CORS, Firebase
+  Google login, GitHub OAuth app, Android APK, custom domain (what to do now vs after code).
+### Modified / Created
+- `apps/web/src/lib/{types,store,markdown}.ts`
+- `apps/web/src/pages/{LearningPagesPage,SearchPage,ProgressPage,moduleRegistry}.tsx`
+- `apps/web/src/index.css` (.md-prose), `docs/MANUAL_STEPS.md`
+### Current Status
+Build green (JS ~112 kB gz). 7 of 11 modules now functional client-side.
+Remaining placeholders: knowledge-graph, assessments, resources, repository.
+### Next Recommended Step
+KH-013 MCQ assessments (client-side) or KH-006 Firebase login (after user does MANUAL_STEPS B).
+### Risks
+- JS bundle growing (marked+minisearch). Consider code-splitting (KH-007-fe) later.
