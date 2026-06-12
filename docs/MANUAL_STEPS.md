@@ -12,9 +12,14 @@ Whenever you finish a section, tell me and I'll wire it into the app.
 
 ---
 
-## A. AI Tutor — connect FreeLLMAPI 🟢 (already buildable)
+## A. AI Tutor — connect FreeLLMAPI
 
-The AI Tutor is already in the app. To make it answer:
+**Recommended (fully online, 24/7):** follow
+[DEPLOY_FREELLMAPI_ORACLE.md](./DEPLOY_FREELLMAPI_ORACLE.md) to host FreeLLMAPI on a
+free Oracle Cloud server with HTTPS. Then in KnowHub → Settings use your
+`https://YOURNAME.duckdns.org/v1` endpoint. Nothing runs on your PC.
+
+**Quick local test (optional):** you can also run it on your computer first: 
 
 1. Run your FreeLLMAPI server (you already have it locally in the `freellmapi`
    folder). In that folder run:

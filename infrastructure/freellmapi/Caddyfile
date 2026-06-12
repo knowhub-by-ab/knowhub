@@ -1,0 +1,8 @@
+# Caddy reverse proxy with automatic HTTPS.
+# {$DOMAIN} is read from the DOMAIN environment variable (see docker-compose.yml).
+# Caddy automatically obtains and renews a free Let's Encrypt certificate for it.
+
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy freellmapi:3001
+}
