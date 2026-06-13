@@ -28,7 +28,7 @@ export default function RepositoryPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [repoName, setRepoName] = useState(gh.repo || "knowhub");
+  const [repoName, setRepoName] = useState(gh.repo || "knowhub-learning");
 
   // Handle the OAuth redirect (#gh=token or #gh_error=...).
   useEffect(() => {
@@ -175,7 +175,7 @@ export default function RepositoryPage() {
               <input
                 value={repoName}
                 onChange={(e) => setRepoName(e.target.value)}
-                placeholder="knowhub"
+                placeholder="knowhub-learning"
                 className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
               />
             </label>
