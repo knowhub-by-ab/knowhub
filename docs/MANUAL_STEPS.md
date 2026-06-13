@@ -14,14 +14,17 @@ Whenever you finish a section, tell me and I'll wire it into the app.
 
 ## A. AI Tutor — add a free provider key 🟢
 
-The AI Tutor uses KnowHub's **built-in backend** (the `/api/chat` Cloudflare Pages
-Function). You just add one or more free provider keys (e.g. Google Gemini, Groq —
-no card) as secrets in your Cloudflare Pages project. Full walkthrough:
-[AI_BACKEND_SETUP.md](./AI_BACKEND_SETUP.md).
+**No Cloudflare needed.** Add your AI keys right inside the app:
+1. Open KnowHub → **Settings → AI provider keys**.
+2. Pick a provider (e.g. **ApiFreeLLM** or **Google Gemini**), paste the key, **Add**.
+   Add several and order them — KnowHub tries them top-to-bottom with automatic fallback.
+3. Open **AI Tutor** and chat. Done.
 
-In short: get a free key → add it as a secret named `GEMINI_API_KEY` (or `GROQ_API_KEY`)
-in Cloudflare → Workers & Pages → knowhub-ai → Settings → Variables and secrets →
-redeploy → open the AI Tutor (leave KnowHub Settings blank).
+Your keys are saved to your account (when signed in) and sync across devices.
+
+> Optional/advanced: you can *also* set keys as Cloudflare Pages secrets
+> (`GEMINI_API_KEY`, etc.) to act as a shared server-side fallback — but it isn't
+> required. See [AI_BACKEND_SETUP.md](./AI_BACKEND_SETUP.md).
 
 ---
 
@@ -139,9 +142,11 @@ The APK is a thin wrapper around the live site, built by
 **Install on your phone:** download the `.apk`, open it, and allow "install from unknown
 sources" if prompted (standard for apps outside the Play Store).
 
-> Note: this debug APK is unsigned (fine for personal use / sideloading). Google sign-in
-> inside the Android WebView may need a follow-up (Capacitor Firebase Auth plugin); the
-> web app's sign-in is unaffected. Tracked as a known follow-up.
+> Notes: the debug APK is unsigned — that's normal and fine for sideloading (Android just
+> asks you to confirm). Google sign-in inside the app now uses a full-page redirect (not a
+> popup), which works in the Android WebView. If Google ever blocks in-WebView sign-in on
+> your device, just use KnowHub signed-out on mobile (local data) or sign in on the web —
+> your keys/data still sync via your account.
 
 ---
 

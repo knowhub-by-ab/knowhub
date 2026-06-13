@@ -4,6 +4,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   type Auth,
@@ -47,9 +49,48 @@ export function subscribeAuth(cb: (user: User | null) => void): () => void {
   return onAuthStateChanged(auth, cb);
 }
 
+/** True when running inside the Capacitor Android/iOS WebView. */
+function isNative(): boolean {
+  return Boolean(
+    (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
+      ?.isNativePlatform?.()
+  );
+}
+
 export async function signInWithGoogle(): Promise<void> {
   if (!auth) return;
-  await signInWithPopup(auth, new GoogleAuthProvider());
+  const provider = new GoogleAuthProvider();
+  // Popups are blocked in mobile WebViews; use a full-page redirect there.
+  if (isNative()) {
+    await signInWithRedirect(auth, provider);
+    return;
+  }
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (err) {
+    // Fall back to redirect if the popup is blocked/unsupported.
+    const code = (err as { code?: string })?.code ?? "";
+    if (
+      code.includes("popup-blocked") ||
+      code.includes("popup-closed") ||
+      code.includes("operation-not-supported") ||
+      code.includes("cancelled-popup")
+    ) {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+    throw err;
+  }
+}
+
+/** Completes a redirect-based sign-in (call once at startup). Safe in all modes. */
+export async function completeRedirectSignIn(): Promise<void> {
+  if (!auth) return;
+  try {
+    await getRedirectResult(auth);
+  } catch {
+    /* ignore — onAuthStateChanged still reflects the result */
+  }
 }
 
 export async function signOutUser(): Promise<void> {

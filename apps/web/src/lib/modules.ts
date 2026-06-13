@@ -11,6 +11,7 @@ import {
   Library,
   GitBranch,
   Settings,
+  Compass,
   type LucideIcon,
 } from "lucide-react";
 
@@ -110,6 +111,14 @@ export const MODULES: ModuleDef[] = [
     icon: GitBranch,
     summary: "Connect a GitHub repo as the source of truth for your knowledge.",
     prdRef: "Module 2",
+  },
+  {
+    id: "guide",
+    label: "Guide",
+    path: "/app/guide",
+    icon: Compass,
+    summary: "New here? A step-by-step walkthrough of how to use KnowHub.",
+    prdRef: "Onboarding",
   },
   {
     id: "settings",

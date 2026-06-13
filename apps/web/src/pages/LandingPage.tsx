@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  Github,
   Smartphone,
   ShieldCheck,
   Sparkles,
@@ -43,14 +42,6 @@ export default function LandingPage() {
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <Logo />
         <nav className="flex items-center gap-3">
-          <a
-            href="https://github.com/knowhub-by-ab/knowhub"
-            target="_blank"
-            rel="noreferrer"
-            className="hidden items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white sm:inline-flex"
-          >
-            <Github className="h-4 w-4" /> GitHub
-          </a>
           <Link
             to="/app"
             className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-900/40 transition hover:bg-brand-500"

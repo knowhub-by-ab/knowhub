@@ -10,8 +10,11 @@ import NotFoundPage from "@/pages/NotFoundPage";
 import { MODULES } from "@/lib/modules";
 import { IMPLEMENTED_MODULES } from "@/pages/moduleRegistry";
 import { initSync } from "@/lib/sync";
+import { completeRedirectSignIn } from "@/lib/auth";
 
-// Start cloud sync (no-op until the user signs in with a configured Firebase).
+// Complete any redirect-based Google sign-in (mobile WebView), then start cloud
+// sync (both no-ops until Firebase is configured and the user signs in).
+completeRedirectSignIn();
 initSync();
 
 const router = createBrowserRouter([
