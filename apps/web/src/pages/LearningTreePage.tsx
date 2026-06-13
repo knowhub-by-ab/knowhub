@@ -86,7 +86,7 @@ function NodeRow({
             setExpanded(true);
           }
         }}
-        className={`group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5 ${
+        className={`group flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg px-2 py-1.5 hover:bg-white/5 ${
           dragOver ? "ring-1 ring-brand-400 bg-brand-600/10" : ""
         }`}
         style={{ paddingLeft: `${depth * 18 + 8}px` }}
@@ -139,19 +139,21 @@ function NodeRow({
           </div>
         ) : (
           <>
-            <span className="flex-1 truncate text-sm text-slate-100">{node.title}</span>
+            <span className="min-w-[6rem] flex-1 truncate text-sm text-slate-100">
+              {node.title}
+            </span>
 
             <button
               onClick={() => tree.setStatus(node.id, nextStatus(node.status))}
               title="Click to change status"
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${
                 STATUS_STYLES[node.status]
               }`}
             >
               {STATUS_LABELS[node.status]}
             </button>
 
-            <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+            <div className="flex shrink-0 items-center gap-1 transition sm:opacity-0 sm:group-hover:opacity-100">
               <button
                 onClick={() => tree.reorder(node.id, -1)}
                 disabled={idx <= 0}

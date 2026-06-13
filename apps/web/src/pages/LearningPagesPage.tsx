@@ -115,6 +115,7 @@ export default function LearningPagesPage() {
 
   // Batch generation
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [batchPrompt, setBatchPrompt] = useState("");
   const [batch, setBatch] = useState<{ running: boolean; done: number; total: number; error: string | null }>(
     { running: false, done: 0, total: 0, error: null }
   );
@@ -138,7 +139,7 @@ export default function LearningPagesPage() {
           const md = await generatePageContent(
             data.aiKeys,
             n.title,
-            `Write a complete learning page for "${n.title}".`
+            batchPrompt.trim() || `Write a complete learning page for "${n.title}".`
           );
           setPage(id, md);
           if (id === selectedId) setDraft(md);
@@ -238,25 +239,29 @@ export default function LearningPagesPage() {
           {/* Collapsible picker */}
           <aside className="rounded-2xl border border-white/10 bg-white/[0.03] p-2">
             {/* Batch generate toolbar */}
-            <div className="mb-1 flex items-center justify-between gap-2 px-1">
-              <span className="text-xs text-slate-500">
-                {checked.size > 0 ? `${checked.size} selected` : "Tick topics to batch-generate"}
-              </span>
+            <div className="mb-2 space-y-2 px-1">
+              <div className="text-xs text-slate-500">
+                {checked.size > 0
+                  ? `${checked.size} topic${checked.size === 1 ? "" : "s"} selected`
+                  : "Tick topics below to batch-generate their pages"}
+              </div>
+              <input
+                value={batchPrompt}
+                onChange={(e) => setBatchPrompt(e.target.value)}
+                placeholder="Optional instruction for all selected (e.g. 'concise, with examples')"
+                disabled={batch.running}
+                className="w-full rounded-md border border-white/15 bg-slate-900/60 px-2 py-1.5 text-xs text-white outline-none focus:border-brand-500 disabled:opacity-50"
+              />
               <button
                 onClick={batchGenerate}
                 disabled={checked.size === 0 || batch.running}
-                className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-40"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-brand-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-40"
                 title="Generate pages for the selected topics"
               >
                 {batch.running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                Generate
+                {batch.running ? `Generating ${batch.done}/${batch.total}…` : `Generate ${checked.size || ""} selected`}
               </button>
             </div>
-            {batch.running && (
-              <p className="px-1 pb-1 text-xs text-brand-200">
-                Generating {batch.done}/{batch.total}…
-              </p>
-            )}
             {batch.error && <p className="px-1 pb-1 text-xs text-rose-300">{batch.error}</p>}
             <ul className="max-h-[60vh] overflow-y-auto">
               {roots.map((n) => (
