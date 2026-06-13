@@ -43,3 +43,37 @@ export async function chatCompletion(
   if (!data.content) throw new AiError("AI returned an empty response.");
   return { content: data.content, provider: data.provider };
 }
+
+/** Best-effort extraction of a JSON value from an LLM reply (handles code fences/prose). */
+export function extractJson<T>(text: string): T {
+  let t = text.trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) t = fence[1].trim();
+  const firstObj = t.indexOf("{");
+  const firstArr = t.indexOf("[");
+  let start = -1;
+  let close = "}";
+  if (firstArr !== -1 && (firstObj === -1 || firstArr < firstObj)) {
+    start = firstArr;
+    close = "]";
+  } else if (firstObj !== -1) {
+    start = firstObj;
+    close = "}";
+  }
+  if (start === -1) throw new AiError("AI did not return JSON.");
+  const end = t.lastIndexOf(close);
+  try {
+    return JSON.parse(t.slice(start, end + 1)) as T;
+  } catch {
+    throw new AiError("Could not parse the AI's JSON response. Try again.");
+  }
+}
+
+/** Ask the AI and parse its reply as JSON of type T. */
+export async function chatJSON<T>(
+  keys: ProviderKey[],
+  messages: ChatMessage[]
+): Promise<T> {
+  const { content } = await chatCompletion(keys, messages);
+  return extractJson<T>(content);
+}

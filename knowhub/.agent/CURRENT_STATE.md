@@ -12,8 +12,12 @@
   (MiniSearch), Assessments (MCQ create/take/score), Progress, Notes, Resources,
   Settings, AI Tutor -- plus the Dashboard.
 - AI backend: built-in Cloudflare Pages Function (`functions/api/chat.ts`) --
-  multi-provider, OpenAI-compatible, with fallback. Needs the user to add a provider key
-  (e.g. `GEMINI_API_KEY`) as a Pages secret. Optional custom endpoint override in Settings.
+  multi-provider with fallback. Providers: OpenAI-compatible (Gemini/Groq/OpenRouter/
+  OpenAI) + ApiFreeLLM adapter. Keys are managed in the dashboard (Settings -> AI provider
+  keys, ordered = fallback priority, stored locally, sent per request) and/or as Pages
+  secrets (deeper fallback).
+- AI generation: "Generate with AI" creates a full learning tree from a topic (Learning
+  Tree page) and a 5-question MCQ quiz from a topic (Assessments page).
 - Build verified green each phase (`npm run build`, ~116 kB gz JS).
 
 ## Remaining (next phases)

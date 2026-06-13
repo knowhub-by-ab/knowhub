@@ -21,7 +21,7 @@ npm run build      # -> apps/web/dist
 - Add a module: register it in `apps/web/src/lib/modules.ts` and add a page in
   `apps/web/src/pages/moduleRegistry.tsx`.
 - Specs: `agent_docs/01..31`. Operational memory: `knowhub/.agent/`.
-- Guides: `docs/AI_BACKEND_SETUP.md`, `docs/MANUAL_STEPS.md`, `docs/SETUP_AND_DEPLOYMENT.md`.
+- Guides: `docs/AI_BACKEND_SETUP.md`, `docs/MANUAL_STEPS.md`. Deployment settings: README.
 
 ## To switch the AI Tutor on
 Add a free key (e.g. Gemini) as a Cloudflare Pages secret `GEMINI_API_KEY`, then redeploy.

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ClipboardCheck,
   Plus,
@@ -7,8 +8,11 @@ import {
   ArrowLeft,
   Check,
   X,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { quizzes, useAppData } from "@/lib/store";
+import { generateQuiz } from "@/lib/aiActions";
 import type { Question, Quiz } from "@/lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "take"; quizId: string };
@@ -335,6 +339,24 @@ function TakeQuiz({ quiz, onDone }: { quiz: Quiz; onDone: () => void }) {
 export default function AssessmentsPage() {
   const data = useAppData();
   const [view, setView] = useState<View>({ mode: "list" });
+  const [genTopic, setGenTopic] = useState("");
+  const [genLoading, setGenLoading] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+
+  async function generate() {
+    const topic = genTopic.trim();
+    if (!topic || genLoading) return;
+    setGenError(null);
+    setGenLoading(true);
+    try {
+      await generateQuiz(data.aiKeys, topic, 5);
+      setGenTopic("");
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : "Generation failed.");
+    } finally {
+      setGenLoading(false);
+    }
+  }
 
   if (view.mode === "create") return <CreateQuiz onDone={() => setView({ mode: "list" })} />;
   if (view.mode === "take") {
@@ -358,6 +380,38 @@ export default function AssessmentsPage() {
         >
           <Plus className="h-4 w-4" /> New quiz
         </button>
+      </div>
+
+      {/* Generate with AI */}
+      <div className="mt-5 rounded-xl border border-brand-500/30 bg-brand-500/5 p-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            value={genTopic}
+            placeholder="Generate a 5-question quiz with AI, e.g. 'TCP/IP basics'…"
+            onChange={(e) => setGenTopic(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && generate()}
+            disabled={genLoading}
+            className="flex-1 rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500 disabled:opacity-50"
+          />
+          <button
+            onClick={generate}
+            disabled={genLoading || !genTopic.trim()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600/90 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-40"
+          >
+            {genLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {genLoading ? "Generating…" : "Generate"}
+          </button>
+        </div>
+        {genError && <p className="mt-2 text-xs text-rose-300">{genError}</p>}
+        {data.aiKeys.length === 0 && !genError && (
+          <p className="mt-2 text-xs text-slate-500">
+            Tip: add a provider key in{" "}
+            <Link to="/app/settings" className="text-brand-300 underline">
+              Settings
+            </Link>{" "}
+            to use AI generation.
+          </p>
+        )}
       </div>
 
       <div className="mt-6 space-y-3">
