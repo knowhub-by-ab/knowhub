@@ -356,7 +356,7 @@ Recommendations
 Included:
 
 ```text id="22-022"
-FreeLLMAPI
+the KnowHub AI gateway
 
 Provider Fallbacks
 

@@ -718,7 +718,7 @@ Test Provider
 
 ---
 
-# 40. FreeLLMAPI Configuration
+# 40. the KnowHub AI gateway Configuration
 
 Dedicated configuration section.
 

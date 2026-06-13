@@ -1007,7 +1007,7 @@ over paid alternatives.
 Default:
 
 ```text id="21-077"
-FreeLLMAPI
+the KnowHub AI gateway
 ```
 
 ---

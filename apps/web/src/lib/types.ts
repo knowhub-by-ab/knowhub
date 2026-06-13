@@ -25,7 +25,7 @@ export interface AiSettings {
   baseUrl: string;
   /** Bearer key (stored locally only). */
   apiKey: string;
-  /** Model id; "auto" lets FreeLLMAPI's router choose. */
+  /** Model id; "auto" lets the AI gateway choose. */
   model: string;
 }
 

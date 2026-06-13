@@ -695,7 +695,7 @@ Never Be Exposed To Frontend
 Primary:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 ```
 
 ---

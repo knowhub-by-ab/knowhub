@@ -578,7 +578,7 @@ HTTPS Only
 Users may configure:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 
 Gemini
 
@@ -704,7 +704,7 @@ Reveal only after user action.
 Example:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 ↓
 Gemini
 ↓

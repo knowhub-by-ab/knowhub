@@ -1,41 +1,45 @@
 # ARCHITECTURE.md
 
-> Purpose: Operational architecture reference. | Last Updated: 2026-06-12
+> Purpose: Operational architecture reference. | Last Updated: 2026-06-13
 
-## Target monorepo layout (spec 26) — built incrementally
+## Monorepo layout (current)
 ```
 knowhub/
-├── apps/
-│   ├── web/      # React+Vite+TS+Tailwind front-end  ← EXISTS (Phase 1)
-│   ├── mobile/   # Capacitor Android wrapper          (planned)
-│   └── admin/    # Admin dashboard                    (planned)
-├── packages/     # ui, types, utils, ai, github, search, assessment,
-│                 #   progress, auth, validation        (planned)
-├── workers/      # api, ai, github, sync, scheduler (Cloudflare Workers) (planned)
-├── infrastructure/  # cloudflare, firebase, github, deployment (planned)
-├── agent_docs/   # the 31 specifications + AI workflow (source of truth for specs)
-└── knowhub/.agent/  # operational memory (this folder)
+├── apps/web/            # React + Vite + TS + Tailwind front-end (EXISTS)
+├── functions/api/       # Cloudflare Pages Functions (AI backend: chat.ts)
+├── agent_docs/          # the 31 product/engineering specifications + AI workflow
+├── knowhub/.agent/      # operational memory (this folder)
+├── docs/                # setup & how-to guides
+└── package.json         # npm workspaces root
 ```
-Dependency direction (spec 26 §58): apps/workers → packages. Never the reverse.
+Planned (spec 26): `packages/*`, `workers/*`, `infrastructure/*`, `apps/mobile`.
 
-## Phase 1 (current) — apps/web
-- `src/main.tsx` — react-router-dom browser router. Routes: `/` (landing),
-  `/app` (layout + dashboard), `/app/:module` (placeholders), `*` (404).
-- `src/lib/modules.ts` — single source of truth for the MVP module list (label, path,
-  icon, summary, PRD reference). Drives sidebar, landing grid, dashboard grid.
-- `src/components/AppLayout.tsx` — responsive sidebar shell for the authed app area.
-- `src/pages/*` — LandingPage, DashboardPage, ModulePlaceholderPage, NotFoundPage.
-- `public/_redirects` — `/* /index.html 200` so SPA client routing works on Pages.
+## Front-end (apps/web)
+- `src/main.tsx` — react-router-dom. Routes: `/` (landing), `/app` (layout + dashboard),
+  `/app/:module`, `*` (404).
+- `src/lib/modules.ts` — single source of truth for the MVP module list (drives sidebar,
+  landing grid, dashboard grid).
+- `src/lib/store.ts` — local-first store (localStorage + useSyncExternalStore) holding
+  nodes, pages, notes, resources, quizzes, settings. Helpers: `tree.*`, `resources.*`,
+  `quizzes.*`, `setPage`, `setNotes`, `setSettings`, `summarizeProgress`.
+- `src/lib/ai.ts` — AI client. Calls built-in `/api/chat` by default; if a custom endpoint
+  is set in Settings it is PRIMARY with `/api/chat` as automatic fallback.
+- `src/pages/*` + `moduleRegistry.tsx` — implemented modules vs on-roadmap placeholder.
+
+## AI backend (functions/api/chat.ts)
+- Same-origin Cloudflare Pages Function, OpenAI-compatible, multi-provider with fallback.
+- Providers via Pages secrets: `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` /
+  `OPENAI_API_KEY` (comma-separated for rotation), or `AI_UPSTREAMS` JSON for full control.
+  Optional `AI_GATE_KEY` to restrict access. See `docs/AI_BACKEND_SETUP.md`.
 
 ## Planned runtime architecture (specs 02, 18)
 ```
-User → Cloudflare Pages (React) → Cloudflare Workers (API/AI/GitHub/Sync)
-     → D1 (progress/analytics/settings) · KV (cache) · R2 (backups)
-     → User's GitHub repo (knowledge = source of truth)
-     → FreeLLMAPI (AI) + optional user provider keys (encrypted)
+User → Cloudflare Pages (React + Pages Functions for AI)
+     → Cloudflare Workers (API/GitHub/Sync) + D1 + KV + R2   (planned)
+     → User's GitHub repo (knowledge = source of truth)       (planned)
 ```
 - AI content flow: Generate → Draft branch → Pull Request → user review → merge.
-- Secrets live in Cloudflare (wrangler), never in the repo or frontend.
+- Secrets live in the Cloudflare Pages project, never in the repo or browser.
 
 ## Related Documents
-- [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) · spec [02](../../agent_docs/02_SYSTEM_ARCHITECTURE.md) · [26](../../agent_docs/26_PROJECT_STRUCTURE_AND_MONOREPO_LAYOUT.md) · [18](../../agent_docs/18_DEPLOYMENT_DEVOPS_AND_INFRASTRUCTURE_SPECIFICATION.md)
+- [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) · specs [02](../../agent_docs/02_SYSTEM_ARCHITECTURE.md), [26](../../agent_docs/26_PROJECT_STRUCTURE_AND_MONOREPO_LAYOUT.md), [18](../../agent_docs/18_DEPLOYMENT_DEVOPS_AND_INFRASTRUCTURE_SPECIFICATION.md)

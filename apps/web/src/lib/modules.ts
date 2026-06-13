@@ -60,7 +60,7 @@ export const MODULES: ModuleDef[] = [
     label: "AI Tutor",
     path: "/app/ai-chat",
     icon: MessagesSquare,
-    summary: "Ask, explain, generate pages and tests — powered by FreeLLMAPI.",
+    summary: "Ask, explain, and generate pages and tests with your AI tutor.",
     prdRef: "Module 6",
   },
   {

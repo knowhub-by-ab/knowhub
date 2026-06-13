@@ -849,7 +849,7 @@ RepositorySettings
 Supports:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 
 Gemini Key
 

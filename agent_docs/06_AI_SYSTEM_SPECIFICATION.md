@@ -169,7 +169,7 @@ Repository Commit
 Default:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 ```
 
 This is the primary AI infrastructure.
@@ -181,7 +181,7 @@ This is the primary AI infrastructure.
 Supported providers:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 
 OpenRouter
 
@@ -208,7 +208,7 @@ Example:
 
 ```text
 Priority 1:
-FreeLLMAPI
+the KnowHub AI gateway
 
 Priority 2:
 Gemini
@@ -1099,7 +1099,7 @@ Provider Validation
 
 ---
 
-# 46. FreeLLMAPI Integration
+# 46. the KnowHub AI gateway Integration
 
 Required Features:
 
@@ -1193,7 +1193,7 @@ The AI system is considered successful when:
 * Provider failover works automatically
 * All changes require approval
 * Repository remains source of truth
-* FreeLLMAPI functions as primary provider
+* the KnowHub AI gateway functions as primary provider
 * Alternative providers work seamlessly
 
 END OF DOCUMENT

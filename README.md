@@ -34,9 +34,10 @@ and is built out incrementally.
 - **Backend (planned):** Cloudflare Workers + D1 + KV + R2
 - **Auth (planned):** Firebase Google Sign-In
 - **Storage of truth:** the user's own GitHub repository
-- **AI provider:** [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) — an external,
-  self-hosted, open-source OpenAI-compatible proxy. KnowHub connects to it over HTTP; it is
-  **not** vendored into this repo.
+- **AI backend:** built-in Cloudflare Pages Function (`functions/api/chat.ts`) — a
+  multi-provider, OpenAI-compatible gateway with automatic fallback, configured with your
+  own free provider keys (Gemini/Groq/OpenRouter/OpenAI) as Cloudflare secrets. A custom
+  OpenAI-compatible endpoint can be set in Settings as an optional override.
 - **Mobile (planned):** Capacitor → Android APK via GitHub Releases
 - **Hosting:** Cloudflare Pages (frontend) — auto-deploys on every push to `main`
 

@@ -1,32 +1,33 @@
 # TASKS.md
 
-> Purpose: Backlog & priorities. | Last Updated: 2026-06-12
+> Purpose: Backlog & priorities. | Last Updated: 2026-06-13
 
 ## Done
-- [x] KH-001 — Scaffold monorepo + `apps/web` (React/Vite/TS/Tailwind). (2026-06-12)
-- [x] KH-002 — Landing page + app shell + dashboard + module placeholders. (2026-06-12)
-- [x] KH-003 — Cloudflare Pages config (`_redirects`, build settings, README guide). (2026-06-12)
-- [x] KH-004 — Local build verified. (2026-06-12)
+- [x] KH-001 -- Scaffold monorepo + `apps/web`. (2026-06-12)
+- [x] KH-002 -- Landing + app shell + dashboard + module placeholders. (2026-06-12)
+- [x] KH-003 -- Cloudflare Pages config + auto-deploy. (2026-06-12)
+- [x] KH-004 -- Local build verified. (2026-06-12)
+- [x] KH-009 -- AI Tutor chat (built-in `/api/chat` backend + optional custom endpoint).
+- [x] KH-010 -- Learning Tree (nodes CRUD, nesting, expand/collapse, status).
+- [x] KH-011 -- Learning Pages (Markdown editor + sanitized preview, autosave).
+- [x] KH-012 -- Search (MiniSearch over topics/pages/notes).
+- [x] KH-013 -- Assessments (MCQ create/take/score, attempts).
+- [x] KH-014 -- Notes (global Markdown notebook + autosave).
+- [x] KH-015 -- Progress (overall + per-topic).
+- [x] KH-019 -- Resources library.
+- [x] KH-020 -- Knowledge Graph (SVG visualization).
+- [x] KH-021 -- AI backend = built-in Cloudflare Pages Function (multi-provider + fallback).
+- [x] KH-022 -- Remove the external AI proxy entirely (DEC-006).
 
-## Done (Phase 2 — local-first usable app, 2026-06-13)
-- [x] KH-009 — AI Tutor chat via FreeLLMAPI (UI + direct client call). Provider fallback
-      is handled by FreeLLMAPI itself. Streaming = follow-up.
-- [x] KH-010 — Learning Tree engine: nodes CRUD, nesting, expand/collapse, status.
-- [x] KH-014 — Global notes workspace (markdown + autosave).
-- [x] KH-015 — Dashboard wired to real store-derived stats. (basic)
-- [x] KH-018 — AI provider Settings page (local config).
-
-## Next (MVP build order — each phase ends green + auto-deploys)
-- [ ] KH-005 — ShadCN UI + TanStack Router/Query adoption (align to spec 02/20). Priority: med.
-- [ ] KH-006 — Firebase Google Sign-In + auth-gated `/app` (spec 10). Priority: high.
-- [ ] KH-007 — Cloudflare Worker API skeleton + D1 schema (specs 18,19,03). Priority: high.
-- [ ] KH-008 — GitHub OAuth + connect/create repo + read/write/sync (spec 09). Priority: high.
-- [ ] KH-011 — Markdown learning pages + Mermaid render (spec 11). Priority: high (client-side feasible).
-- [ ] KH-012 — Search (MiniSearch over local content) (spec 08). Priority: med.
-- [ ] KH-013 — MCQ assessments + scoring + recommendations (spec 12). Priority: med.
-- [ ] KH-019 — AI Tutor streaming + "generate tree/page/quiz into draft" actions. Priority: med.
-- [ ] KH-016 — Capacitor Android build + GitHub Releases APK (spec 18). Priority: low.
-- [ ] KH-017 — GitHub Actions CI (lint/test/build) (spec 18 §38). Priority: med.
+## Next
+- [ ] KH-006 -- Firebase Google Sign-In + auth-gated `/app` (spec 10). Needs user's Firebase keys.
+- [ ] KH-008 -- GitHub OAuth + connect/create repo + read/write/sync = Repository module
+      (spec 09). Needs a backend (Pages Function) + login.
+- [ ] KH-023 -- AI Tutor streaming + "generate tree/page/quiz into draft" actions.
+- [ ] KH-005 -- ShadCN UI + TanStack Router/Query (align to spec 02/20).
+- [ ] KH-016 -- Capacitor Android build + GitHub Releases APK (spec 18).
+- [ ] KH-017 -- GitHub Actions CI (lint/build) (spec 18).
 
 ## Tech debt
-- [ ] KH-DEBT-001 — Triage 2 npm audit advisories.
+- [ ] KH-DEBT-001 -- Triage npm audit advisories.
+- [ ] KH-DEBT-002 -- Code-split JS bundle (marked + minisearch) if it grows further.

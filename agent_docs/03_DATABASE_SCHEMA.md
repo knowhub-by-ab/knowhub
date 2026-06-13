@@ -285,7 +285,7 @@ Stores AI provider settings.
 ## Supported Providers
 
 ```text id="2sq3bf"
-FreeLLMAPI
+the KnowHub AI gateway
 
 OpenRouter
 

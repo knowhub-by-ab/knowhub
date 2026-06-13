@@ -52,7 +52,7 @@ This document defines:
 * Content Generation Workflow
 * AI Decision Framework
 * Multi-Provider Routing
-* FreeLLMAPI Integration
+* the KnowHub AI gateway Integration
 * User Question Resolution
 
 This system is the intelligence layer powering KnowHub.
@@ -824,7 +824,7 @@ before external generation.
 AI provider layer supports:
 
 ```text id="17-050"
-FreeLLMAPI
+the KnowHub AI gateway
 
 OpenRouter
 
@@ -855,12 +855,12 @@ Task Type
 
 ---
 
-# 43. FreeLLMAPI Priority
+# 43. the KnowHub AI gateway Priority
 
 Default provider:
 
 ```text id="17-052"
-FreeLLMAPI
+the KnowHub AI gateway
 ```
 
 ---
@@ -892,7 +892,7 @@ Other Compatible Providers
 Example:
 
 ```text id="17-054"
-FreeLLMAPI
+the KnowHub AI gateway
 ↓
 Gemini
 ↓
@@ -978,6 +978,6 @@ The AI System is successful when:
 * It recommends useful next steps
 * It generates high-quality drafts
 * It respects approval workflows
-* It remains affordable through FreeLLMAPI-first routing
+* It remains affordable through the KnowHub AI gateway-first routing
 
 END OF DOCUMENT

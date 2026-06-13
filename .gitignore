@@ -33,7 +33,3 @@ Thumbs.db
 
 # Local Claude Code / agent harness settings (not part of the product)
 /.claude/
-
-# Third-party open-source dependency (used as KnowHub's external AI backend).
-# Kept locally, NOT vendored into this repo. See README "AI provider".
-/freellmapi/

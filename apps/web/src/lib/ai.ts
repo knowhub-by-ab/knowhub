@@ -3,7 +3,7 @@ import type { AiSettings, ChatMessage } from "./types";
 // AI client. By default KnowHub talks to its OWN built-in backend — the
 // Cloudflare Pages Function at /api/chat (multi-provider, configured with keys
 // in the Pages project). Advanced users can override this in Settings by
-// entering an external OpenAI-compatible endpoint (e.g. a self-hosted FreeLLMAPI).
+// entering a custom OpenAI-compatible endpoint.
 
 export class AiError extends Error {}
 
@@ -93,9 +93,9 @@ export async function chatCompletion(
   // No external endpoint configured → use the built-in backend directly.
   if (!settings.baseUrl.trim()) return chatViaBuiltIn(settings, messages);
 
-  // External endpoint (e.g. self-hosted FreeLLMAPI) is the PRIMARY. If it fails
-  // (down, rate-limited, CORS, quota), automatically fall back to the built-in
-  // multi-key backend so the tutor keeps working.
+  // The custom endpoint is the PRIMARY. If it fails (down, rate-limited, CORS,
+  // quota), automatically fall back to the built-in multi-key backend so the
+  // tutor keeps working.
   try {
     return await chatViaExternal(settings, messages);
   } catch (primaryErr) {
@@ -103,7 +103,7 @@ export async function chatCompletion(
       return await chatViaBuiltIn(settings, messages);
     } catch (fallbackErr) {
       throw new AiError(
-        `Primary AI (FreeLLMAPI) failed: ${
+        `Primary AI endpoint failed: ${
           primaryErr instanceof Error ? primaryErr.message : "unknown"
         } — and fallback also failed: ${
           fallbackErr instanceof Error ? fallbackErr.message : "unknown"

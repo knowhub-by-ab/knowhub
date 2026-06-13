@@ -319,7 +319,7 @@ Recommendations
 
 ---
 
-# 21. FreeLLMAPI Validation
+# 21. the KnowHub AI gateway Validation
 
 Verify:
 

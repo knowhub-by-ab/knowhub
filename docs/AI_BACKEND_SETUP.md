@@ -92,5 +92,5 @@ KnowHub → **Settings → API key**. The backend will reject requests without i
   redeploy. Re-check Step 2 names exactly, then redeploy (Step 3).
 - **"All providers failed":** the key may be invalid or out of quota. Try a
   different provider, or add a second key.
-- **Want to use your own FreeLLMAPI instead:** put its URL in Settings → it
-  overrides the built-in backend.
+- **Want to use your own endpoint instead:** put any OpenAI-compatible URL in
+  Settings → it overrides the built-in backend (which still serves as fallback).

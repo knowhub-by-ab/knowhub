@@ -12,38 +12,16 @@ Whenever you finish a section, tell me and I'll wire it into the app.
 
 ---
 
-## A. AI Tutor — connect FreeLLMAPI
+## A. AI Tutor — add a free provider key 🟢
 
-**Recommended (fully online, 24/7):** follow
-[DEPLOY_FREELLMAPI_ORACLE.md](./DEPLOY_FREELLMAPI_ORACLE.md) to host FreeLLMAPI on a
-free Oracle Cloud server with HTTPS. Then in KnowHub → Settings use your
-`https://YOURNAME.duckdns.org/v1` endpoint. Nothing runs on your PC.
+The AI Tutor uses KnowHub's **built-in backend** (the `/api/chat` Cloudflare Pages
+Function). You just add one or more free provider keys (e.g. Google Gemini, Groq —
+no card) as secrets in your Cloudflare Pages project. Full walkthrough:
+[AI_BACKEND_SETUP.md](./AI_BACKEND_SETUP.md).
 
-**Quick local test (optional):** you can also run it on your computer first: 
-
-1. Run your FreeLLMAPI server (you already have it locally in the `freellmapi`
-   folder). In that folder run:
-   ```bash
-   npm install
-   npm run dev
-   ```
-   It serves at `http://localhost:3001`.
-2. Open its dashboard (`http://localhost:3001`), add at least one provider key,
-   and copy the **unified key** (`freellmapi-…`).
-3. Allow KnowHub's website to call it. In `freellmapi/.env` add this line, then restart it:
-   ```env
-   DASHBOARD_ORIGINS=https://knowhub-ai.pages.dev,http://localhost:5173
-   ```
-4. In KnowHub → **Settings**:
-   - **Endpoint base URL:** `http://localhost:3001/v1`
-   - **API key:** the `freellmapi-…` key
-   - **Model:** `auto`
-   - **Save**, then open **AI Tutor** and chat.
-
-> Note: a website served over **https** (your live site) calling **http://localhost**
-> can be blocked by the browser. If the live site can't reach it, use the AI Tutor on the
-> local dev site (`npm run dev` → http://localhost:5173) for now. A hosted AI endpoint
-> removes this limitation later.
+In short: get a free key → add it as a secret named `GEMINI_API_KEY` (or `GROQ_API_KEY`)
+in Cloudflare → Workers & Pages → knowhub-ai → Settings → Variables and secrets →
+redeploy → open the AI Tutor (leave KnowHub Settings blank).
 
 ---
 
@@ -136,7 +114,7 @@ Then add that domain to Firebase **Authorized domains** (B4) and the GitHub OAut
 
 | Feature | Your setup | When |
 | --- | --- | --- |
-| AI Tutor | Run FreeLLMAPI, set Settings + CORS | 🟢 now (section A) |
+| AI Tutor | Add a free provider key as a Cloudflare secret | 🟢 now (section A) |
 | Google login | Firebase project + keys in Cloudflare | 🟡 do A/B now; I wire it |
 | GitHub sync | GitHub OAuth App (+ secret in Cloudflare later) | 🟡 create app now |
 | Android APK | Just download from Releases | 🟡 after I add the build |

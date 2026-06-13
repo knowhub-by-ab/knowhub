@@ -1,30 +1,28 @@
 # CURRENT_STATE.md
 
-> Purpose: Current reality of the repo. | Last Updated: 2026-06-12
+> Purpose: Current reality of the repo. | Last Updated: 2026-06-13
 
-## Completed (Phase 1 — deployable foundation)
-- Monorepo scaffolded (npm workspaces): root `package.json`, `.gitignore`, `README.md`,
-  `LICENSE`, `.env.example`.
-- `apps/web` — React + Vite + TS + Tailwind app (indigo/violet dark theme):
-  - Landing page (hero, principles, module preview, disabled "Download Android App"
-    placeholder, footer).
-  - App shell with responsive sidebar; Dashboard with stats + module grid.
-  - All 11 MVP module routes wired to a shared placeholder screen (honest "on roadmap").
-  - SPA `_redirects`, favicon, brand theme tokens.
-- **Local build verified:** `npm install` + `npm run build` → `apps/web/dist` (JS ~75 kB gz). No type errors.
-- `.agent` operational docs refreshed for KnowHub (were freellmapi-specific).
+## Live
+- Deployed at https://knowhub-ai.pages.dev (Cloudflare Pages, auto-deploy on push to `main`).
 
-## In Progress
-- Git init + push to `knowhub-by-ab/knowhub`; Cloudflare Pages connection (user-side steps).
+## Completed
+- Monorepo + `apps/web` (React + Vite + TS + Tailwind, indigo/violet dark theme).
+- 10 of 11 modules functional, all client-side / local-first (localStorage):
+  Learning Tree, Knowledge Graph (SVG), Learning Pages (Markdown + preview), Search
+  (MiniSearch), Assessments (MCQ create/take/score), Progress, Notes, Resources,
+  Settings, AI Tutor -- plus the Dashboard.
+- AI backend: built-in Cloudflare Pages Function (`functions/api/chat.ts`) --
+  multi-provider, OpenAI-compatible, with fallback. Needs the user to add a provider key
+  (e.g. `GEMINI_API_KEY`) as a Pages secret. Optional custom endpoint override in Settings.
+- Build verified green each phase (`npm run build`, ~116 kB gz JS).
 
-## Pending (next phases) — see TASKS.md
-- Firebase Google auth (spec 10), GitHub OAuth + repo connect/sync (spec 09),
-  Cloudflare Workers API + D1 (specs 18,19,03), AI tutor via FreeLLMAPI (spec 06,17),
-  Learning Tree engine (spec 07), search (spec 08), assessments (spec 12), Capacitor (spec 18).
+## Remaining (next phases)
+- Repository module = GitHub OAuth + connect/sync (spec 09) -- needs a backend + login.
+- Firebase Google login (spec 10) -- needs the user's Firebase project keys.
+- Capacitor Android APK (spec 18); ShadCN/TanStack adoption (spec 02/20).
 
-## Blockers
-- None code-side. Cloudflare Pages first deploy requires manual user setup (guide provided).
-
-## Notes / Workarounds
-- `freellmapi/` is gitignored (third-party AI backend, not vendored).
-- npm audit: 2 moderate advisories in transitive build deps (untriaged, non-blocking).
+## Notes
+- The external AI proxy has been fully removed (folder, deploy configs, guides, and all
+  code/doc references) per user request -- see DEC-006. AI relies solely on the built-in
+  Pages Function backend.
+- npm audit: a few moderate advisories in transitive build deps (untriaged, non-blocking).

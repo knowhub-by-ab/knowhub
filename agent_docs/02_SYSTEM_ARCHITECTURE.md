@@ -112,7 +112,7 @@ Architecture must prioritize:
         ▼         ▼         ▼
 
   Firebase     GitHub      AI Layer
-    Auth        APIs      FreeLLMAPI
+    Auth        APIs      the KnowHub AI gateway
 
         │
         ▼
@@ -417,7 +417,7 @@ Drafts
 ## Primary Provider
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 ```
 
 ---
@@ -1008,7 +1008,7 @@ Architecture is considered successful when:
 * AI changes require approval
 * Repository remains source of truth
 * System works on web and Android
-* FreeLLMAPI is fully integrated
+* the KnowHub AI gateway is fully integrated
 * Search remains performant
 * Learning trees scale effectively
 * Multi-user isolation is maintained

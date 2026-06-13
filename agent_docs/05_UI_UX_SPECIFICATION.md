@@ -874,7 +874,7 @@ Usage
 Supports:
 
 ```text id="jlwm4n"
-FreeLLMAPI
+the KnowHub AI gateway
 
 OpenRouter
 

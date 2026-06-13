@@ -294,7 +294,7 @@ API Keys
 Primary Provider:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 ```
 
 ---
@@ -312,7 +312,7 @@ Default AI Engine
 Order:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 ↓
 User-Owned Free Gemini Key
 ↓
@@ -369,12 +369,12 @@ Purchase Compute
 
 ---
 
-# 17. FreeLLMAPI Priority Rule
+# 17. the KnowHub AI gateway Priority Rule
 
 Whenever available:
 
 ```text
-Always Use FreeLLMAPI First
+Always Use the KnowHub AI gateway First
 ```
 
 ---
@@ -896,7 +896,7 @@ GitHub Free
 
 Firebase Free
 
-FreeLLMAPI
+the KnowHub AI gateway
 
 User-Owned Free API Keys
 ```

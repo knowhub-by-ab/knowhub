@@ -3,8 +3,8 @@
  *
  * Served at  POST /api/chat  on the same domain as the site (no CORS needed in
  * production). Acts as a multi-provider, OpenAI-compatible AI gateway with
- * automatic fallback — the free, no-card, always-on equivalent of FreeLLMAPI's
- * core routing, per KnowHub spec 02/18 ("AI orchestration in Cloudflare Workers").
+ * automatic fallback — free, no-card, always-on — per KnowHub spec 02/18
+ * ("AI orchestration in Cloudflare Workers").
  *
  * Configure providers via the Pages project's Variables & Secrets. Either:
  *   - AI_UPSTREAMS = JSON array of { name, baseUrl, apiKey, model }  (full control), or

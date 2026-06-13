@@ -774,7 +774,7 @@ Response:
 
 ```json id="19-066"
 {
-  "primary": "freellmapi",
+  "primary": "knowhub-ai",
   "fallbacks": []
 }
 ```

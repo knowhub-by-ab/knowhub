@@ -785,7 +785,7 @@ Test Key
 
 ---
 
-# 46. FreeLLMAPI Settings Component
+# 46. the KnowHub AI gateway Settings Component
 
 Displays:
 

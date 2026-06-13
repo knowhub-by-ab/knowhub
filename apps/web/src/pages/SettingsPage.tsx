@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, Check, ExternalLink } from "lucide-react";
+import { Settings as SettingsIcon, Check } from "lucide-react";
 import { setSettings, useAppData } from "@/lib/store";
 
 export default function SettingsPage() {
@@ -35,17 +35,8 @@ export default function SettingsPage() {
           below <strong>blank</strong> to use it.
         </p>
         <p className="mt-2 text-sm text-slate-400">
-          <em>Advanced (optional):</em> to use your own endpoint instead — e.g. a
-          self-hosted{" "}
-          <a
-            href="https://github.com/tashfeenahmed/freellmapi"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-brand-300 hover:underline"
-          >
-            FreeLLMAPI <ExternalLink className="h-3 w-3" />
-          </a>{" "}
-          — enter its URL below.
+          <em>Advanced (optional):</em> to route through your own
+          OpenAI-compatible endpoint instead, enter its URL below.
         </p>
 
         <label className="mt-5 block text-sm font-medium text-slate-300">
@@ -64,7 +55,7 @@ export default function SettingsPage() {
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="freellmapi-…"
+            placeholder="sk-… (optional)"
             className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
           />
         </label>
@@ -94,9 +85,8 @@ export default function SettingsPage() {
         </div>
 
         <p className="mt-4 text-xs text-slate-500">
-          Stored only in this browser. Your server must allow requests from{" "}
-          <code className="text-slate-400">{window.location.origin}</code> (CORS) — set
-          this with FreeLLMAPI's <code className="text-slate-400">DASHBOARD_ORIGINS</code>.
+          Stored only in this browser. If you use a custom endpoint, it must allow requests
+          from <code className="text-slate-400">{window.location.origin}</code> (CORS).
         </p>
       </section>
     </div>

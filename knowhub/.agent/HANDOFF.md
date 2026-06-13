@@ -1,35 +1,38 @@
 # HANDOFF.md
 
-> Purpose: Fast onboarding for the next contributor. | Last Updated: 2026-06-12
+> Purpose: Fast onboarding for the next contributor. | Last Updated: 2026-06-13
 
 ## Current state
-KnowHub Phase 1 (deployable foundation) is built and verified. Next: confirm first
-Cloudflare Pages deploy, then start KH-006 (Firebase auth).
+KnowHub is live at https://knowhub-ai.pages.dev with 10/11 modules working client-side.
+AI Tutor uses the built-in `/api/chat` Pages Function (needs a provider key as a Pages
+secret). Next real features: Firebase Google login and GitHub sync (Repository module).
 
-## Run locally (verified)
+## Run locally
 ```bash
-cd knowhub        # repo root
+cd knowhub
 npm install
-npm run dev       # http://localhost:5173
-npm run build     # → apps/web/dist
+npm run dev        # http://localhost:5173
+npm run build      # -> apps/web/dist
 ```
 
 ## Where things are
-- App code: `apps/web/src` (pages, components, lib/modules.ts).
-- Module list (drives all nav): `apps/web/src/lib/modules.ts` — add a module here and it
-  appears in sidebar + landing + dashboard, with a placeholder route automatically.
-- Specs (source of truth): `agent_docs/01..31`.
-- Operational memory: `knowhub/.agent/` (this folder).
+- App code: `apps/web/src` (pages, components, lib/{store,ai,markdown,modules,types}.ts).
+- AI backend: `functions/api/chat.ts` (Cloudflare Pages Function).
+- Add a module: register it in `apps/web/src/lib/modules.ts` and add a page in
+  `apps/web/src/pages/moduleRegistry.tsx`.
+- Specs: `agent_docs/01..31`. Operational memory: `knowhub/.agent/`.
+- Guides: `docs/AI_BACKEND_SETUP.md`, `docs/MANUAL_STEPS.md`, `docs/SETUP_AND_DEPLOYMENT.md`.
 
-## Deployment
-- Cloudflare Pages: build command `npm run build`, output `apps/web/dist`, NODE_VERSION 20.
-- SPA routing handled by `apps/web/public/_redirects`.
+## To switch the AI Tutor on
+Add a free key (e.g. Gemini) as a Cloudflare Pages secret `GEMINI_API_KEY`, then redeploy.
+See `docs/AI_BACKEND_SETUP.md`.
 
-## Next steps (priority order) — see TASKS.md
-1. KH-006 Firebase Google auth + gate `/app`.
-2. KH-007 Worker API + D1 schema. 3. KH-008 GitHub OAuth + repo sync. 4. KH-009 AI tutor.
+## Next steps (priority)
+1. KH-006 Firebase Google login (needs user's Firebase keys -> `docs/MANUAL_STEPS.md` B).
+2. KH-008 GitHub OAuth + repo connect/sync (Repository module) via a Pages Function.
+3. KH-023 AI Tutor streaming + "generate tree/page/quiz" actions (no setup).
 
 ## Warnings
-- `freellmapi/` is gitignored (external AI backend; do not vendor — see DEC-002).
-- Don't commit secrets; backend secrets go in Cloudflare (wrangler), not the repo.
-- Module screens are placeholders by design until their phase lands.
+- Don't commit secrets; they go in the Cloudflare Pages project settings.
+- Module screens not in `moduleRegistry` fall back to the on-roadmap placeholder by design.
+- The external AI proxy was removed (DEC-006); do not reintroduce it.

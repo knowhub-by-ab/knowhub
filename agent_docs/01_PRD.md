@@ -443,7 +443,7 @@ Displays:
 Primary Provider:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 ```
 
 ---
@@ -465,7 +465,7 @@ Capabilities:
 Default:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 ```
 
 User may optionally configure:
@@ -731,7 +731,7 @@ Must Include:
 * Progress Tracking
 * Draft Workspace
 * Approval Queue
-* FreeLLMAPI Integration
+* the KnowHub AI gateway Integration
 * Android APK Support
 
 ---

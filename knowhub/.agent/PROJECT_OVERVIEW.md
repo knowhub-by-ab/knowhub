@@ -1,6 +1,6 @@
 # PROJECT_OVERVIEW.md
 
-> Purpose: Stable, high-level description of the project. | Last Updated: 2026-06-12 | Owner: knowhub-by-ab
+> Purpose: Stable, high-level description of the project. | Last Updated: 2026-06-13 | Owner: knowhub-by-ab
 
 ## Project Purpose
 **KnowHub** is an AI-powered, GitHub-native **Personal Learning Operating System** that
@@ -20,16 +20,19 @@ documents in [`agent_docs/`](../../agent_docs).
 
 ## Tech Stack (specs 02 & 18)
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS (ShadCN UI, TanStack to follow).
-- **Backend (planned):** Cloudflare Workers + D1 + KV + R2.
+- **AI backend:** built-in **Cloudflare Pages Function** (`functions/api/chat.ts`) — a
+  multi-provider, OpenAI-compatible gateway with automatic fallback. Configured with the
+  user's own free provider keys (Gemini/Groq/OpenRouter/OpenAI) as Cloudflare Pages secrets.
+  A custom OpenAI-compatible endpoint can be set in Settings as an optional override.
 - **Auth (planned):** Firebase Google Sign-In; GitHub OAuth for repo access.
-- **AI provider:** **FreeLLMAPI** — external, self-hosted, open-source OpenAI-compatible
-  proxy (github.com/tashfeenahmed/freellmapi). Connected over HTTP; NOT vendored.
+- **Backend (planned):** Cloudflare Workers + D1 + KV + R2.
 - **Mobile (planned):** Capacitor → Android APK via GitHub Releases.
-- **Hosting:** Cloudflare Pages (frontend, auto-deploy from GitHub).
+- **Hosting:** Cloudflare Pages (auto-deploy from GitHub `main`).
 
 ## Repository / Deployment
 - GitHub: `https://github.com/knowhub-by-ab/knowhub`
-- Cloudflare Pages auto-deploys `main` → builds `apps/web` → serves `apps/web/dist`.
+- Live: `https://knowhub-ai.pages.dev` (Cloudflare Pages project `knowhub-ai`).
+- Build: `npm run build` → output `apps/web/dist` → auto-deploys on push to `main`.
 
 ## Scope
 - **MVP** (spec 22): Google auth, GitHub integration, Learning Tree, pages, notes, AI chat,
