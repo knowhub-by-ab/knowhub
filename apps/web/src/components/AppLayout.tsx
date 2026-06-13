@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Menu, X, LogOut, Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
@@ -107,7 +107,15 @@ export default function AppLayout() {
 
         {/* Main content */}
         <main className="min-h-screen flex-1 px-4 py-6 sm:px-8">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex items-center gap-2 py-10 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

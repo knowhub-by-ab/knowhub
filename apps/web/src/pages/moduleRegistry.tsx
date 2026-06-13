@@ -1,32 +1,22 @@
-import type { JSX } from "react";
-import LearningTreePage from "@/pages/LearningTreePage";
-import KnowledgeGraphPage from "@/pages/KnowledgeGraphPage";
-import LearningPagesPage from "@/pages/LearningPagesPage";
-import SearchPage from "@/pages/SearchPage";
-import ProgressPage from "@/pages/ProgressPage";
-import NotesPage from "@/pages/NotesPage";
-import ResourcesPage from "@/pages/ResourcesPage";
-import AssessmentsPage from "@/pages/AssessmentsPage";
-import RepositoryPage from "@/pages/RepositoryPage";
-import GuidePage from "@/pages/GuidePage";
-import SettingsPage from "@/pages/SettingsPage";
-import AiChatPage from "@/pages/AiChatPage";
+import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 
-/**
- * Maps a module id to its implemented page. Modules not listed here fall back
- * to the on-roadmap placeholder. Add an entry as each module is built.
- */
-export const IMPLEMENTED_MODULES: Record<string, () => JSX.Element> = {
-  "learning-tree": LearningTreePage,
-  "knowledge-graph": KnowledgeGraphPage,
-  "learning-pages": LearningPagesPage,
-  search: SearchPage,
-  progress: ProgressPage,
-  notes: NotesPage,
-  resources: ResourcesPage,
-  assessments: AssessmentsPage,
-  repository: RepositoryPage,
-  guide: GuidePage,
-  settings: SettingsPage,
-  "ai-chat": AiChatPage,
+// Each implemented module is lazy-loaded so it ships as its own chunk and only
+// downloads when the route is opened. Modules not listed here fall back to the
+// on-roadmap placeholder.
+export const IMPLEMENTED_MODULES: Record<
+  string,
+  LazyExoticComponent<ComponentType>
+> = {
+  "learning-tree": lazy(() => import("@/pages/LearningTreePage")),
+  "knowledge-graph": lazy(() => import("@/pages/KnowledgeGraphPage")),
+  "learning-pages": lazy(() => import("@/pages/LearningPagesPage")),
+  search: lazy(() => import("@/pages/SearchPage")),
+  progress: lazy(() => import("@/pages/ProgressPage")),
+  notes: lazy(() => import("@/pages/NotesPage")),
+  resources: lazy(() => import("@/pages/ResourcesPage")),
+  assessments: lazy(() => import("@/pages/AssessmentsPage")),
+  repository: lazy(() => import("@/pages/RepositoryPage")),
+  guide: lazy(() => import("@/pages/GuidePage")),
+  settings: lazy(() => import("@/pages/SettingsPage")),
+  "ai-chat": lazy(() => import("@/pages/AiChatPage")),
 };

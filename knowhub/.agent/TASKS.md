@@ -29,12 +29,18 @@
       release on tag); landing "Download Android App" wired to releases/latest.
 - [x] KH-024 -- Official logo favicon matches Logo.tsx.
 
-## All 11 MVP modules implemented. Remaining = polish:
-- [ ] KH-DEBT-002 -- Code-split JS bundle (lazy-load Firebase).
-- [ ] KH-025 -- Native Google sign-in in the Android WebView (Capacitor Firebase Auth plugin).
+## Polish done
+- [x] KH-DEBT-002 -- Code-split: lazy routes + manualChunks (firebase/markdown/search/vendor);
+      landing chunk ~12 kB, Firebase loads only under /app. >500 kB warning gone.
+- [x] KH-017 -- CI workflow (.github/workflows/ci.yml): lint + type-check + build on push/PR.
+- [x] KH-023 -- AI Tutor streaming (SSE passthrough for OpenAI providers; JSON for ApiFreeLLM).
+- [x] KH-016b -- APK build fixed (Node 22 + Java 21 for Capacitor 7).
+
+## Remaining (optional)
 - [ ] KH-005 -- ShadCN UI + TanStack adoption (spec 02/20).
-- [ ] KH-017 -- GitHub Actions CI (lint/build).
-- [ ] KH-023 -- AI Tutor streaming responses.
+- [ ] KH-025 -- Native Google sign-in in Android WebView (Capacitor Firebase Auth plugin),
+      only if the redirect flow is blocked on a device.
+- [ ] KH-026 -- Signed release APK (keystore) instead of debug.
 - [ ] KH-008 -- GitHub OAuth + connect/create repo + read/write/sync = Repository module
       (spec 09). Needs a backend (Pages Function) + login.
 - [ ] KH-023 -- AI Tutor streaming + "generate tree/page/quiz into draft" actions.

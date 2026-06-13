@@ -1,27 +1,39 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import "./index.css";
-import AppLayout from "@/components/AppLayout";
 import LandingPage from "@/pages/LandingPage";
-import DashboardPage from "@/pages/DashboardPage";
-import ModulePlaceholderPage from "@/pages/ModulePlaceholderPage";
-import NotFoundPage from "@/pages/NotFoundPage";
 import { MODULES } from "@/lib/modules";
 import { IMPLEMENTED_MODULES } from "@/pages/moduleRegistry";
-import { initSync } from "@/lib/sync";
-import { completeRedirectSignIn } from "@/lib/auth";
 
-// Complete any redirect-based Google sign-in (mobile WebView), then start cloud
-// sync (both no-ops until Firebase is configured and the user signs in).
-completeRedirectSignIn();
-initSync();
+// Lazy-load the authenticated app shell and pages so the landing page (first
+// paint) stays small and Firebase only loads when entering /app.
+const AppLayout = lazy(() => import("@/components/AppLayout"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const ModulePlaceholderPage = lazy(() => import("@/pages/ModulePlaceholderPage"));
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
+
+function Loading() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-aurora">
+      <div className="text-sm text-slate-500">Loading…</div>
+    </div>
+  );
+}
+
+function S({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<Loading />}>{children}</Suspense>;
+}
 
 const router = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
   {
     path: "/app",
-    element: <AppLayout />,
+    element: (
+      <S>
+        <AppLayout />
+      </S>
+    ),
     children: [
       { index: true, element: <DashboardPage /> },
       ...MODULES.map((m) => {
@@ -41,3 +53,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <RouterProvider router={router} />
   </React.StrictMode>
 );
+
+// Defer Firebase-dependent side-effects off the critical path so the landing
+// page paints fast. Both are no-ops until Firebase is configured + signed in.
+void import("@/lib/auth").then((m) => m.completeRedirectSignIn());
+void import("@/lib/sync").then((m) => m.initSync());

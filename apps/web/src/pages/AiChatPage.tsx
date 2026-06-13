@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { MessagesSquare, Send, Loader2 } from "lucide-react";
 import { useAppData } from "@/lib/store";
-import { chatCompletion, AiError } from "@/lib/ai";
+import { chatStream, AiError } from "@/lib/ai";
 import type { ChatMessage } from "@/lib/types";
 
 const SYSTEM_PROMPT: ChatMessage = {
@@ -30,9 +30,14 @@ export default function AiChatPage() {
     setMessages(next);
     setInput("");
     setLoading(true);
+    let acc = "";
+    setMessages([...next, { role: "assistant", content: "" }]);
     try {
-      const { content } = await chatCompletion(data.aiKeys, [SYSTEM_PROMPT, ...next]);
-      setMessages([...next, { role: "assistant", content }]);
+      await chatStream(data.aiKeys, [SYSTEM_PROMPT, ...next], (piece) => {
+        acc += piece;
+        setMessages([...next, { role: "assistant", content: acc }]);
+        endRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
     } catch (err) {
       setError(err instanceof AiError ? err.message : "Something went wrong.");
       setMessages(next);

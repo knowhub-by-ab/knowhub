@@ -44,6 +44,79 @@ export async function chatCompletion(
   return { content: data.content, provider: data.provider };
 }
 
+/**
+ * Streaming chat. Calls onDelta with each text chunk as it arrives and resolves
+ * to the full reply. Falls back to a single chunk if the backend returns JSON
+ * (e.g. a non-streaming provider like ApiFreeLLM).
+ */
+export async function chatStream(
+  keys: ProviderKey[],
+  messages: ChatMessage[],
+  onDelta: (piece: string) => void
+): Promise<string> {
+  const upstreams = keys
+    .filter((k) => k.apiKey.trim() && (k.provider !== "custom" || k.baseUrl?.trim()))
+    .map(toUpstream);
+
+  let res: Response;
+  try {
+    res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, model: "auto", upstreams, stream: true }),
+    });
+  } catch (err) {
+    throw new AiError(
+      `Could not reach KnowHub's AI backend. ${err instanceof Error ? err.message : ""}`
+    );
+  }
+
+  const ct = res.headers.get("Content-Type") ?? "";
+
+  // Non-streaming provider (or error) → JSON body.
+  if (!ct.includes("text/event-stream")) {
+    const data = (await res.json().catch(() => ({}))) as { content?: string; error?: string };
+    if (!res.ok) throw new AiError(data.error ?? `AI request failed (${res.status}).`);
+    const content = data.content ?? "";
+    if (!content) throw new AiError("AI returned an empty response.");
+    onDelta(content);
+    return content;
+  }
+
+  // OpenAI-style SSE stream.
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith("data:")) continue;
+      const payload = t.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        const j = JSON.parse(payload) as {
+          choices?: { delta?: { content?: string } }[];
+        };
+        const piece = j.choices?.[0]?.delta?.content ?? "";
+        if (piece) {
+          full += piece;
+          onDelta(piece);
+        }
+      } catch {
+        /* ignore keep-alive / partial lines */
+      }
+    }
+  }
+  if (!full) throw new AiError("AI returned an empty response.");
+  return full;
+}
+
 /** Best-effort extraction of a JSON value from an LLM reply (handles code fences/prose). */
 export function extractJson<T>(text: string): T {
   let t = text.trim();

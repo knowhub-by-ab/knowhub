@@ -204,7 +204,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (token !== env.AI_GATE_KEY.trim()) return json({ error: "Unauthorized." }, 401, ch);
   }
 
-  let payload: { messages?: ChatMessage[]; model?: string; upstreams?: Partial<Upstream>[] };
+  let payload: {
+    messages?: ChatMessage[];
+    model?: string;
+    upstreams?: Partial<Upstream>[];
+    stream?: boolean;
+  };
   try {
     payload = await request.json();
   } catch {
@@ -242,6 +247,46 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const model = payload.model && payload.model !== "auto" ? payload.model : "auto";
   const errors: string[] = [];
+
+  // Streaming: pass the upstream's SSE straight through to the client. We fall
+  // back across providers on an initial non-OK status (not mid-stream).
+  if (payload.stream) {
+    for (const up of upstreams) {
+      try {
+        if (up.kind === "apifreellm") {
+          // Not streamable — return the whole answer as JSON; client handles it.
+          const r = await callApiFreeLlm(up, messages);
+          if (r.status === 200 && r.content)
+            return json({ content: r.content, provider: up.name, model: up.model }, 200, ch);
+          errors.push(`${up.name}: ${r.status}${r.error ? " " + r.error : ""}`);
+          continue;
+        }
+        const res = await fetch(`${up.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${up.apiKey}` },
+          body: JSON.stringify({ model: model !== "auto" ? model : up.model, messages, stream: true }),
+        });
+        if (!res.ok || !res.body) {
+          const t = await res.text().catch(() => "");
+          errors.push(`${up.name}: ${res.status} ${t.slice(0, 100)}`);
+          continue;
+        }
+        return new Response(res.body, {
+          status: 200,
+          headers: {
+            ...ch,
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+          },
+        });
+      } catch (err) {
+        errors.push(`${up.name}: ${err instanceof Error ? err.message : "network error"}`);
+        continue;
+      }
+    }
+    return json({ error: `All providers failed. ${errors.join(" | ")}` }, 502, ch);
+  }
 
   for (const up of upstreams) {
     try {
