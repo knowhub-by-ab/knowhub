@@ -78,6 +78,17 @@ export interface Quiz {
   createdAt: number;
 }
 
+export interface GithubState {
+  /** OAuth access token (repo scope). */
+  token?: string;
+  /** Authenticated GitHub login (username). */
+  login?: string;
+  /** Connected repo name (under the user's account). */
+  repo?: string;
+  /** Last successful sync (epoch ms). */
+  lastSync?: number;
+}
+
 export interface AppData {
   version: 1;
   nodes: TreeNode[];
@@ -91,6 +102,8 @@ export interface AppData {
   quizzes: Quiz[];
   /** Configured AI provider keys, in fallback-priority order. */
   aiKeys: ProviderKey[];
+  /** GitHub connection (spec 09). */
+  github?: GithubState;
 }
 
 export const STATUS_LABELS: Record<NodeStatus, string> = {

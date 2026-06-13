@@ -20,10 +20,14 @@
   Tree page) and a 5-question MCQ quiz from a topic (Assessments page).
 - Build verified green each phase (`npm run build`, ~116 kB gz JS).
 
-## Remaining (next phases)
-- Repository module = GitHub OAuth + connect/sync (spec 09) -- needs a backend + login.
-- Firebase Google login (spec 10) -- needs the user's Firebase project keys.
-- Capacitor Android APK (spec 18); ShadCN/TanStack adoption (spec 02/20).
+## All 11 modules implemented
+- Added: Repository (GitHub OAuth connect + sync export/import) and the AI generate actions.
+- Firebase Google login + Firestore cross-device sync are live (user completed setup).
+
+## Remaining (polish / optional)
+- Code-split the JS bundle (Firebase + Firestore pushed it to ~230 kB gz) -- KH-DEBT-002.
+- Native Google sign-in inside the Android WebView (Capacitor Firebase Auth plugin).
+- ShadCN/TanStack adoption (spec 02/20); GitHub Actions CI for lint/build.
 
 ## Notes
 - The external AI proxy has been fully removed (folder, deploy configs, guides, and all

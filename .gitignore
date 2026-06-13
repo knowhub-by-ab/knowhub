@@ -13,6 +13,10 @@ build/
 .wrangler/
 .dev.vars
 
+# Capacitor native platforms (generated in CI)
+apps/web/android/
+apps/web/ios/
+
 # Environment & secrets (never commit real secrets)
 .env
 .env.local

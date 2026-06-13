@@ -89,40 +89,59 @@ This makes your keys + all data follow your account to any device and the Androi
 
 ---
 
-## C. GitHub Sync (your repo = your knowledge) 🟡 — needs a small backend
+## C. GitHub Sync (your repo = your knowledge) 🟢 — built; needs an OAuth app
 
-This lets KnowHub save your trees/pages/notes into a GitHub repo you own. It needs
-a tiny Cloudflare Worker (which I'll build) plus a GitHub OAuth App (which you create).
+This lets KnowHub save your tree/pages/notes into a **private GitHub repo you own**
+(`knowhub.json` + `notes.md` + a `knowledge/` page per topic), and import them back.
+It's built; you just create a GitHub OAuth app and add its 2 keys to Cloudflare.
 
-### C1. Create a GitHub OAuth App
+### C1. Create a GitHub OAuth App (~2 min)
 1. Go to **https://github.com/settings/developers** → **OAuth Apps** → **New OAuth App**.
-2. Fill in:
+2. Fill in **exactly**:
    - **Application name:** `KnowHub`
    - **Homepage URL:** `https://knowhub-ai.pages.dev`
    - **Authorization callback URL:** `https://knowhub-ai.pages.dev/api/github/callback`
-     *(we'll finalize this when the Worker is built — it may change slightly)*
 3. **Register application.**
 4. Copy the **Client ID**. Click **Generate a new client secret** and copy the **secret**
-   (store it safely — you only see it once). **Do not share the secret publicly.**
+   (shown once). Don't paste the secret into chat.
 
-### C2. (Later, with me) store the secret in Cloudflare
-The Client Secret is **secret** — it must NOT go in the frontend or the repo. When the
-Worker is ready, we'll save it as an encrypted Worker secret via the Cloudflare dashboard
-(Settings → Variables and secrets → **add as Secret**, not Plaintext).
+### C2. Add the two keys to Cloudflare Pages (~1 min)
+1. **dash.cloudflare.com → Workers & Pages → knowhub-ai → Settings → Variables and secrets → Add.**
+2. Add as **Secret**:
+   | Name (exact) | Value |
+   | --- | --- |
+   | `GITHUB_OAUTH_CLIENT_ID` | your Client ID |
+   | `GITHUB_OAUTH_CLIENT_SECRET` | your client secret |
+3. **Save**, then **Deployments → Create deployment** (so the secrets take effect).
 
-➡️ **Do C1 whenever you like**; keep the Client ID + secret handy. Don't paste the secret
-into our chat — you'll enter it directly into Cloudflare.
+### C3. Use it
+Open KnowHub → **Repository** → **Connect GitHub** → authorize → set a repo name
+(default `knowhub`) → **Sync to GitHub**. Use **Import from GitHub** on another device to
+pull it back. (Sign in first so the connection syncs with your account.)
 
 ---
 
-## D. Android App (APK) 🟡 — automated, almost nothing for you
+## D. Android App (APK) 🟢 — built (GitHub Actions + Capacitor)
 
-When we add Capacitor + a GitHub Actions workflow, the APK builds automatically and
-appears under your repo's **Releases**. Your only manual step will be:
-1. Go to **https://github.com/knowhub-by-ab/knowhub/releases**, open the latest release,
-   and download the `.apk` file onto your Android phone to install it.
-(You may need to allow "install from unknown sources" on the phone — standard for
-apps outside the Play Store.)
+The APK is a thin wrapper around the live site, built by
+`.github/workflows/android.yml`. To produce one:
+
+**Build it (pick one):**
+- **Manual:** GitHub → **Actions** tab → **Android APK** → **Run workflow** → after ~5–8 min
+  download **knowhub.apk** from the run's **Artifacts**.
+- **Release:** create a version tag and the APK is attached to a GitHub Release automatically:
+  ```bash
+  git tag v0.1.0 && git push origin v0.1.0
+  ```
+  Then it appears at **https://github.com/knowhub-by-ab/knowhub/releases/latest** (which the
+  landing page's "Download Android App" button links to).
+
+**Install on your phone:** download the `.apk`, open it, and allow "install from unknown
+sources" if prompted (standard for apps outside the Play Store).
+
+> Note: this debug APK is unsigned (fine for personal use / sideloading). Google sign-in
+> inside the Android WebView may need a follow-up (Capacitor Firebase Auth plugin); the
+> web app's sign-in is unaffected. Tracked as a known follow-up.
 
 ---
 
@@ -136,13 +155,14 @@ Then add that domain to Firebase **Authorized domains** (B4) and the GitHub OAut
 
 ## Quick status of what needs you
 
-| Feature | Your setup | When |
+| Feature | Your setup | Status |
 | --- | --- | --- |
-| AI Tutor | Add a free provider key as a Cloudflare secret | 🟢 now (section A) |
-| Google login | Firebase project + keys in Cloudflare | 🟡 do A/B now; I wire it |
-| GitHub sync | GitHub OAuth App (+ secret in Cloudflare later) | 🟡 create app now |
-| Android APK | Just download from Releases | 🟡 after I add the build |
-| Custom domain | Optional | 🟢 anytime |
+| AI Tutor | Add provider keys (dashboard Settings, or Cloudflare secrets) | 🟢 A |
+| Google login | Firebase project + 4 keys in Cloudflare | 🟢 B (done) |
+| Cross-device sync | Enable Firestore + rules | 🟢 B2 (done) |
+| GitHub sync | GitHub OAuth app + 2 keys in Cloudflare | 🟢 C |
+| Android APK | Run the Actions workflow / push a tag, then download | 🟢 D |
+| Custom domain | Optional | 🟢 E |
 
-Everything else (Learning Tree, Pages, Search, Progress, Notes, Assessments,
-Knowledge Graph) needs **no setup** — it just works in the browser.
+Everything else (Learning Tree, Knowledge Graph, Pages, Search, Progress, Notes,
+Assessments, Resources) needs **no setup** — it just works in the browser.

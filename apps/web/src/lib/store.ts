@@ -27,6 +27,7 @@ const DEFAULT_DATA: AppData = {
   resources: [],
   quizzes: [],
   aiKeys: [],
+  github: {},
 };
 
 function load(): AppData {
@@ -59,6 +60,7 @@ function load(): AppData {
       resources: parsed.resources ?? [],
       quizzes: parsed.quizzes ?? [],
       aiKeys,
+      github: parsed.github ?? {},
     };
   } catch {
     return structuredClone(DEFAULT_DATA);
@@ -125,7 +127,13 @@ export function replaceAll(next: Partial<AppData>) {
     resources: next.resources ?? [],
     quizzes: next.quizzes ?? [],
     aiKeys: next.aiKeys ?? [],
+    github: next.github ?? {},
   }));
+}
+
+/** Update the GitHub connection state (merged). */
+export function setGithub(patch: Partial<NonNullable<AppData["github"]>>) {
+  setState((prev) => ({ ...prev, github: { ...prev.github, ...patch } }));
 }
 
 // --- ID helper ---

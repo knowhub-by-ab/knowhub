@@ -20,12 +20,21 @@
 - [x] KH-022 -- Remove the external AI proxy entirely (DEC-006).
 
 ## Done (cont.)
-- [x] KH-006 -- Firebase Google Sign-In + auth-gated `/app` (graceful: app runs without
-      config; gate activates when VITE_FIREBASE_* env is set). User adds Firebase keys.
+- [x] KH-006 -- Firebase Google Sign-In + auth-gated `/app` (graceful).
+- [x] KH-007a -- Firestore cross-device cloud sync (DEC-007).
 - [x] KH-023a -- AI "Generate" actions (learning tree + quiz from a topic).
+- [x] KH-008 -- GitHub sync: OAuth (Pages Functions) + Repository page (connect, create/use
+      private repo, sync export knowhub.json/notes.md/knowledge pages, import).
+- [x] KH-016 -- Android APK: Capacitor config + `.github/workflows/android.yml` (artifact +
+      release on tag); landing "Download Android App" wired to releases/latest.
+- [x] KH-024 -- Official logo favicon matches Logo.tsx.
 
-## Next
-- [ ] KH-DEBT-002 -- Code-split (Firebase + marked + minisearch pushed JS >500 kB).
+## All 11 MVP modules implemented. Remaining = polish:
+- [ ] KH-DEBT-002 -- Code-split JS bundle (lazy-load Firebase).
+- [ ] KH-025 -- Native Google sign-in in the Android WebView (Capacitor Firebase Auth plugin).
+- [ ] KH-005 -- ShadCN UI + TanStack adoption (spec 02/20).
+- [ ] KH-017 -- GitHub Actions CI (lint/build).
+- [ ] KH-023 -- AI Tutor streaming responses.
 - [ ] KH-008 -- GitHub OAuth + connect/create repo + read/write/sync = Repository module
       (spec 09). Needs a backend (Pages Function) + login.
 - [ ] KH-023 -- AI Tutor streaming + "generate tree/page/quiz into draft" actions.

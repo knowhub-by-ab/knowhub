@@ -83,17 +83,15 @@ export default function LandingPage() {
           >
             Start learning <ArrowRight className="h-4 w-4" />
           </Link>
-          <button
-            type="button"
-            disabled
-            title="Coming soon — distributed via GitHub Releases"
-            className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-white/15 px-6 py-3 text-sm font-semibold text-slate-300 sm:w-auto"
+          <a
+            href="https://github.com/knowhub-by-ab/knowhub/releases/latest"
+            target="_blank"
+            rel="noreferrer"
+            title="Download the latest Android APK from GitHub Releases"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-6 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/5 sm:w-auto"
           >
             <Smartphone className="h-4 w-4" /> Download Android App
-            <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
-              soon
-            </span>
-          </button>
+          </a>
         </div>
         <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-slate-500">
           <ShieldCheck className="h-3.5 w-3.5" /> No vendor lock-in. Your data stays in
