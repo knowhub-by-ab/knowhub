@@ -204,7 +204,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (token !== env.AI_GATE_KEY.trim()) return json({ error: "Unauthorized." }, 401, ch);
   }
 
-  let payload: { messages?: ChatMessage[]; model?: string };
+  let payload: { messages?: ChatMessage[]; model?: string; upstreams?: Partial<Upstream>[] };
   try {
     payload = await request.json();
   } catch {
@@ -215,7 +215,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: "messages[] is required." }, 400, ch);
   }
 
-  const upstreams = buildUpstreams(env);
+  // Keys sent from the dashboard come first (fallback priority), then any keys
+  // configured server-side (Cloudflare Pages secrets) as a deeper fallback.
+  const requestUpstreams: Upstream[] = Array.isArray(payload.upstreams)
+    ? payload.upstreams
+        .filter((u) => u?.baseUrl && u?.apiKey)
+        .map((u, i) => ({
+          name: u.name ?? `key${i + 1}`,
+          baseUrl: u.baseUrl!,
+          apiKey: u.apiKey!,
+          model: u.model ?? "auto",
+          kind: (u.kind as UpstreamKind) ?? "openai",
+        }))
+    : [];
+  const upstreams = [...requestUpstreams, ...buildUpstreams(env)];
   if (upstreams.length === 0) {
     return json(
       {

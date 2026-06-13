@@ -1,13 +1,14 @@
 import { useSyncExternalStore } from "react";
 import type {
   AppData,
-  AiSettings,
   TreeNode,
   NodeStatus,
   Resource,
   ResourceType,
   Quiz,
   Question,
+  ProviderKey,
+  ProviderId,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -25,7 +26,7 @@ const DEFAULT_DATA: AppData = {
   notes: "",
   resources: [],
   quizzes: [],
-  settings: { baseUrl: "", apiKey: "", model: "auto" },
+  aiKeys: [],
 };
 
 function load(): AppData {
@@ -33,15 +34,31 @@ function load(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(DEFAULT_DATA);
-    const parsed = JSON.parse(raw) as Partial<AppData>;
+    const parsed = JSON.parse(raw) as Partial<AppData> & {
+      // legacy shape (pre-key-list): a single custom endpoint
+      settings?: { baseUrl?: string; apiKey?: string; model?: string };
+    };
+    let aiKeys = parsed.aiKeys ?? [];
+    // Migrate an old single custom endpoint into a `custom` key entry.
+    if (aiKeys.length === 0 && parsed.settings?.baseUrl?.trim()) {
+      aiKeys = [
+        {
+          id: "migrated",
+          provider: "custom",
+          apiKey: parsed.settings.apiKey ?? "",
+          baseUrl: parsed.settings.baseUrl,
+          model: parsed.settings.model,
+        },
+      ];
+    }
     return {
       ...structuredClone(DEFAULT_DATA),
       ...parsed,
-      settings: { ...DEFAULT_DATA.settings, ...(parsed.settings ?? {}) },
       nodes: parsed.nodes ?? [],
       pages: parsed.pages ?? {},
       resources: parsed.resources ?? [],
       quizzes: parsed.quizzes ?? [],
+      aiKeys,
     };
   } catch {
     return structuredClone(DEFAULT_DATA);
@@ -237,11 +254,35 @@ export const quizzes = {
   newQuestionId: () => uid(),
 };
 
-// --- Settings ---------------------------------------------------------------
+// --- AI provider keys (ordered = fallback priority) -------------------------
 
-export function setSettings(settings: AiSettings) {
-  setState((prev) => ({ ...prev, settings }));
-}
+export const aiKeys = {
+  add(input: { provider: ProviderId; apiKey: string; baseUrl?: string; model?: string; label?: string }): ProviderKey {
+    const k: ProviderKey = {
+      id: uid(),
+      provider: input.provider,
+      apiKey: input.apiKey.trim(),
+      baseUrl: input.baseUrl?.trim() || undefined,
+      model: input.model?.trim() || undefined,
+      label: input.label?.trim() || undefined,
+    };
+    setState((prev) => ({ ...prev, aiKeys: [...prev.aiKeys, k] }));
+    return k;
+  },
+  remove(id: string) {
+    setState((prev) => ({ ...prev, aiKeys: prev.aiKeys.filter((k) => k.id !== id) }));
+  },
+  move(id: string, dir: -1 | 1) {
+    setState((prev) => {
+      const arr = [...prev.aiKeys];
+      const i = arr.findIndex((k) => k.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= arr.length) return prev;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      return { ...prev, aiKeys: arr };
+    });
+  },
+};
 
 // --- Derived progress -------------------------------------------------------
 

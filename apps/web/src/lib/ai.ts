@@ -1,114 +1,45 @@
-import type { AiSettings, ChatMessage } from "./types";
+import type { ChatMessage, ProviderKey } from "./types";
+import { toUpstream } from "./providers";
 
-// AI client. By default KnowHub talks to its OWN built-in backend — the
-// Cloudflare Pages Function at /api/chat (multi-provider, configured with keys
-// in the Pages project). Advanced users can override this in Settings by
-// entering a custom OpenAI-compatible endpoint.
+// AI client. Sends the conversation plus the user's configured provider keys
+// (from the dashboard, in fallback-priority order) to KnowHub's built-in backend
+// at /api/chat. The backend tries each upstream in order, then any keys
+// configured server-side (Cloudflare Pages secrets) as a deeper fallback.
 
 export class AiError extends Error {}
 
-function joinUrl(base: string, path: string): string {
-  const b = base.replace(/\/+$/, "");
-  const p = path.replace(/^\/+/, "");
-  return `${b}/${p}`;
-}
-
-/** Built-in backend: same-origin Pages Function. */
-async function chatViaBuiltIn(
-  settings: AiSettings,
+export async function chatCompletion(
+  keys: ProviderKey[],
   messages: ChatMessage[]
-): Promise<string> {
+): Promise<{ content: string; provider?: string }> {
+  const upstreams = keys
+    .filter((k) => k.apiKey.trim() && (k.provider !== "custom" || k.baseUrl?.trim()))
+    .map(toUpstream);
+
   let res: Response;
   try {
     res = await fetch("/api/chat", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Used as the optional AI_GATE_KEY if one is configured.
-        ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {}),
-      },
-      body: JSON.stringify({ messages, model: settings.model || "auto" }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, model: "auto", upstreams }),
     });
   } catch (err) {
     throw new AiError(
       `Could not reach KnowHub's AI backend. ${err instanceof Error ? err.message : ""}`
     );
   }
+
   const data = (await res.json().catch(() => ({}))) as {
     content?: string;
+    provider?: string;
     error?: string;
   };
   if (!res.ok) {
     throw new AiError(
       data.error ??
-        `AI request failed (${res.status}). The AI backend may not have a provider key configured yet.`
+        `AI request failed (${res.status}). Add a provider key in Settings, or check your keys.`
     );
   }
   if (!data.content) throw new AiError("AI returned an empty response.");
-  return data.content;
-}
-
-/** External OpenAI-compatible endpoint (advanced override). */
-async function chatViaExternal(
-  settings: AiSettings,
-  messages: ChatMessage[]
-): Promise<string> {
-  let res: Response;
-  try {
-    res = await fetch(joinUrl(settings.baseUrl, "chat/completions"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: settings.model || "auto",
-        messages,
-        stream: false,
-      }),
-    });
-  } catch (err) {
-    throw new AiError(
-      `Could not reach the AI endpoint. Check the URL and that the server allows requests from this site (CORS). ${
-        err instanceof Error ? err.message : ""
-      }`
-    );
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new AiError(`AI request failed (${res.status}). ${text.slice(0, 300)}`);
-  }
-  const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new AiError("AI returned an empty response.");
-  return content;
-}
-
-export async function chatCompletion(
-  settings: AiSettings,
-  messages: ChatMessage[]
-): Promise<string> {
-  // No external endpoint configured → use the built-in backend directly.
-  if (!settings.baseUrl.trim()) return chatViaBuiltIn(settings, messages);
-
-  // The custom endpoint is the PRIMARY. If it fails (down, rate-limited, CORS,
-  // quota), automatically fall back to the built-in multi-key backend so the
-  // tutor keeps working.
-  try {
-    return await chatViaExternal(settings, messages);
-  } catch (primaryErr) {
-    try {
-      return await chatViaBuiltIn(settings, messages);
-    } catch (fallbackErr) {
-      throw new AiError(
-        `Primary AI endpoint failed: ${
-          primaryErr instanceof Error ? primaryErr.message : "unknown"
-        } — and fallback also failed: ${
-          fallbackErr instanceof Error ? fallbackErr.message : "unknown"
-        }`
-      );
-    }
-  }
+  return { content: data.content, provider: data.provider };
 }

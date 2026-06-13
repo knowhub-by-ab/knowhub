@@ -1,5 +1,11 @@
 # Turn on KnowHub's AI Tutor (free, no card, no localhost)
 
+> **Easiest way (no Cloudflare, no redeploy):** open KnowHub → **Settings** and add your
+> keys in the **AI provider keys** manager. They're saved in your browser, retained across
+> sessions and quota renewals, and you set the **fallback order** (e.g. ApiFreeLLM first,
+> then your 9 Gemini keys). The steps below are the alternative server-side method
+> (Cloudflare secrets), used as a deeper fallback after your dashboard keys.
+
 KnowHub now has its **own built-in AI backend** running on Cloudflare (the
 `/api/chat` Pages Function). To make it answer, you just add **one or more free
 provider keys** to your Cloudflare Pages project. No card, no server, nothing on

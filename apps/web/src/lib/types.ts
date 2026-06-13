@@ -20,13 +20,30 @@ export interface ChatMessage {
   content: string;
 }
 
-export interface AiSettings {
-  /** Base URL of an OpenAI-compatible endpoint, e.g. http://localhost:3001/v1 */
-  baseUrl: string;
-  /** Bearer key (stored locally only). */
+export type ProviderId =
+  | "apifreellm"
+  | "gemini"
+  | "groq"
+  | "openrouter"
+  | "openai"
+  | "custom";
+
+/**
+ * One configured AI provider key. The list order in AppData.aiKeys is the
+ * fallback priority (first = tried first). Stored locally in the browser and
+ * sent to the /api/chat backend per request, so keys can be managed from the
+ * dashboard without redeploying.
+ */
+export interface ProviderKey {
+  id: string;
+  provider: ProviderId;
   apiKey: string;
-  /** Model id; "auto" lets the AI gateway choose. */
-  model: string;
+  /** Required only for `custom`; otherwise filled from the provider preset. */
+  baseUrl?: string;
+  /** Optional model override; otherwise the preset default / "auto". */
+  model?: string;
+  /** Optional friendly label. */
+  label?: string;
 }
 
 export type ResourceType = "doc" | "article" | "video" | "course" | "book" | "other";
@@ -72,7 +89,8 @@ export interface AppData {
   resources: Resource[];
   /** MCQ assessments (spec: Module 9). */
   quizzes: Quiz[];
-  settings: AiSettings;
+  /** Configured AI provider keys, in fallback-priority order. */
+  aiKeys: ProviderKey[];
 }
 
 export const STATUS_LABELS: Record<NodeStatus, string> = {

@@ -18,9 +18,9 @@ export default function AiChatPage() {
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  // Built-in backend (/api/chat) is always available; an external endpoint is optional.
+  // The tutor works as long as at least one key is configured (here or server-side).
   const configured = true;
-  const usingExternal = data.settings.baseUrl.trim().length > 0;
+  const keyCount = data.aiKeys.length;
 
   async function send() {
     const text = input.trim();
@@ -31,8 +31,8 @@ export default function AiChatPage() {
     setInput("");
     setLoading(true);
     try {
-      const reply = await chatCompletion(data.settings, [SYSTEM_PROMPT, ...next]);
-      setMessages([...next, { role: "assistant", content: reply }]);
+      const { content } = await chatCompletion(data.aiKeys, [SYSTEM_PROMPT, ...next]);
+      setMessages([...next, { role: "assistant", content }]);
     } catch (err) {
       setError(err instanceof AiError ? err.message : "Something went wrong.");
       setMessages(next);
@@ -52,7 +52,9 @@ export default function AiChatPage() {
           <h1 className="text-2xl font-bold text-white">AI Tutor</h1>
           <p className="text-sm text-slate-400">
             Ask anything.{" "}
-            {usingExternal ? "Using your custom endpoint." : "Powered by KnowHub's AI backend."}
+            {keyCount > 0
+              ? `Using ${keyCount} configured provider key${keyCount === 1 ? "" : "s"} (with fallback).`
+              : "Add provider keys in Settings."}
           </p>
         </div>
       </div>
