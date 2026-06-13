@@ -12,6 +12,14 @@ const config: CapacitorConfig = {
     url: "https://knowhub-ai.pages.dev",
     cleartext: false,
   },
+  plugins: {
+    // Use the native Google account picker, then sign the JS SDK in with the
+    // returned credential (skipNativeAuth) so the web app's auth state is used.
+    FirebaseAuthentication: {
+      skipNativeAuth: true,
+      providers: ["google.com"],
+    },
+  },
 };
 
 export default config;

@@ -36,11 +36,20 @@
 - [x] KH-023 -- AI Tutor streaming (SSE passthrough for OpenAI providers; JSON for ApiFreeLLM).
 - [x] KH-016b -- APK build fixed (Node 22 + Java 21 for Capacitor 7).
 
+## Done (cont.)
+- [x] KH-007b -- Sync EVERYTHING across devices incl github + aiKeys, last-write-wins by
+      timestamp (fixes data missing on 2nd device). store: getUpdatedAt/applyRemoteState.
+- [x] KH-024b -- Android app icon generated from the logo (scripts/gen-icon.mjs +
+      @capacitor/assets in the workflow).
+- [x] KH-025 -- Native Google sign-in via @capacitor-firebase/authentication (skipNativeAuth
+      + signInWithCredential); used when running natively. Needs google-services.json (CI secret).
+- [x] KH-026 -- Signed release APK via CI keystore secrets (workflow falls back to debug
+      when secrets absent). Manual steps in docs/MANUAL_STEPS.md F.
+
 ## Remaining (optional)
-- [ ] KH-005 -- ShadCN UI + TanStack adoption (spec 02/20).
-- [ ] KH-025 -- Native Google sign-in in Android WebView (Capacitor Firebase Auth plugin),
-      only if the redirect flow is blocked on a device.
-- [ ] KH-026 -- Signed release APK (keystore) instead of debug.
+- [ ] KH-005 -- ShadCN UI + TanStack adoption (spec 02/20). See note: high-risk full
+      migration; recommend incremental, not a big-bang rewrite.
+- [ ] Verify native APK end-to-end once F secrets are set (CI may need iteration).
 - [ ] KH-008 -- GitHub OAuth + connect/create repo + read/write/sync = Repository module
       (spec 09). Needs a backend (Pages Function) + login.
 - [ ] KH-023 -- AI Tutor streaming + "generate tree/page/quiz into draft" actions.

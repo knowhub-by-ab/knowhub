@@ -6,6 +6,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  signInWithCredential,
   signOut,
   onAuthStateChanged,
   type Auth,
@@ -60,9 +61,18 @@ function isNative(): boolean {
 export async function signInWithGoogle(): Promise<void> {
   if (!auth) return;
   const provider = new GoogleAuthProvider();
-  // Popups are blocked in mobile WebViews; use a full-page redirect there.
+
+  // In the native app, browser-based OAuth (popup/redirect) is blocked by Google
+  // inside a WebView. Use the native Google account picker via the Capacitor
+  // Firebase Authentication plugin, then sign the JS SDK in with the credential.
   if (isNative()) {
-    await signInWithRedirect(auth, provider);
+    const { FirebaseAuthentication } = await import(
+      "@capacitor-firebase/authentication"
+    );
+    const result = await FirebaseAuthentication.signInWithGoogle();
+    const idToken = result.credential?.idToken;
+    if (!idToken) throw new Error("No Google credential returned.");
+    await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
     return;
   }
   try {
@@ -94,6 +104,16 @@ export async function completeRedirectSignIn(): Promise<void> {
 }
 
 export async function signOutUser(): Promise<void> {
+  if (isNative()) {
+    try {
+      const { FirebaseAuthentication } = await import(
+        "@capacitor-firebase/authentication"
+      );
+      await FirebaseAuthentication.signOut();
+    } catch {
+      /* ignore */
+    }
+  }
   if (auth) await signOut(auth);
 }
 

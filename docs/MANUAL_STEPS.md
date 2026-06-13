@@ -150,6 +150,63 @@ sources" if prompted (standard for apps outside the Play Store).
 
 ---
 
+## F. Android: native Google sign-in + signed APK 🟡 — needs secrets you create
+
+The plain APK works, but **Google sign-in inside the app** needs native config, and a
+**signed** APK needs a keystore. Both are driven by GitHub repo secrets — set them once and
+re-run the workflow. (All commands below use your PC; `keytool` ships with Java/Android Studio.)
+
+### F1. Register an Android app in Firebase
+1. Firebase Console → your **knowhub** project → **Project settings** → **Your apps** →
+   **Add app** → **Android**.
+2. **Android package name:** `dev.knowhub.app` (must match exactly).
+3. Register → **Download `google-services.json`**.
+
+### F2. Create a signing keystore (once — keep it forever)
+```bash
+keytool -genkey -v -keystore knowhub-release.jks -alias knowhub \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+Pick a password and remember it. (Answer the name/org prompts however you like.)
+
+### F3. Get the keystore's SHA-1 / SHA-256
+```bash
+keytool -list -v -keystore knowhub-release.jks -alias knowhub
+```
+Copy the **SHA1** and **SHA-256** lines.
+
+### F4. Add the fingerprints to Firebase
+Firebase → Project settings → Your apps → the Android app → **Add fingerprint** → paste
+**SHA-1**, add again for **SHA-256** → **Save**. Then **re-download `google-services.json`**
+(now it contains the OAuth client) — use this newer file in F6.
+
+### F5. Base64-encode the two files (Windows PowerShell)
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("google-services.json")) | Set-Clipboard   # then paste into the secret
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("knowhub-release.jks"))   | Set-Clipboard
+```
+
+### F6. Add GitHub repo secrets
+Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+| Secret name | Value |
+| --- | --- |
+| `GOOGLE_SERVICES_JSON` | base64 of `google-services.json` |
+| `ANDROID_KEYSTORE_BASE64` | base64 of `knowhub-release.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
+| `ANDROID_KEY_ALIAS` | `knowhub` |
+| `ANDROID_KEY_PASSWORD` | the key password (same as store password unless you set a different one) |
+
+### F7. Re-run the workflow
+GitHub → **Actions → Android APK → Run workflow**. It now builds a **signed** APK with
+**native Google sign-in** and the **KnowHub icon**. Install it and sign in — the account
+picker is native (no browser bounce).
+
+> The keystore must stay the **same** for every future release. If you ever lose it, create a
+> new one and re-add its SHA-1/256 to Firebase. This is new ground for the build — if a step
+> errors, paste the Actions log and I'll adjust.
+
+---
+
 ## E. Custom domain (optional) 🟢
 If you ever buy a domain (e.g. `knowhub.app`):
 1. Cloudflare → **Workers & Pages → knowhub-ai → Custom domains → Set up a domain**.

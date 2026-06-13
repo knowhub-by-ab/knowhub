@@ -1,7 +1,13 @@
 name: Android APK
 
-# Builds the KnowHub Android APK (Capacitor) and, on a version tag, attaches it
-# to a GitHub Release. Run manually from the Actions tab, or push a tag like v0.1.0.
+# Builds the KnowHub Android APK (Capacitor). Produces a downloadable artifact,
+# and on a version tag attaches the APK to a GitHub Release.
+#
+# Behaviour scales with the repo secrets you set (see docs/MANUAL_STEPS.md F):
+#   - GOOGLE_SERVICES_JSON (base64)  -> enables native Google sign-in
+#   - ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD + ANDROID_KEY_ALIAS +
+#     ANDROID_KEY_PASSWORD             -> builds a SIGNED release APK
+# With no secrets it still builds an (unsigned) debug APK with the proper icon.
 
 on:
   workflow_dispatch:
@@ -17,17 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
-
       - uses: android-actions/setup-android@v3
 
       - name: Install dependencies
@@ -40,16 +43,60 @@ jobs:
         working-directory: apps/web
         run: npx cap add android
 
-      - name: Sync Capacitor
+      - name: Generate app icon (matches the web logo)
         working-directory: apps/web
-        run: npx cap sync android
+        run: |
+          npm i -D sharp @capacitor/assets
+          node scripts/gen-icon.mjs
+          npx @capacitor/assets generate --android
 
-      - name: Build debug APK
-        working-directory: apps/web/android
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Configure, sync and build APK
+        working-directory: apps/web
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
 
-      - name: Rename APK
-        run: cp apps/web/android/app/build/outputs/apk/debug/app-debug.apk knowhub.apk
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "Enabling native Firebase auth (google-services.json present)…"
+            echo "$GOOGLE_SERVICES_JSON" | base64 -d > android/app/google-services.json
+            sed -i 's#dependencies {#dependencies {\n        classpath "com.google.gms:google-services:4.4.2"#' android/build.gradle
+            echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
+          else
+            echo "No GOOGLE_SERVICES_JSON secret — native sign-in disabled in this build."
+          fi
+
+          npx cap sync android
+
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Building SIGNED release APK…"
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.jks
+            cat >> android/app/build.gradle <<'EOF'
+android {
+    signingConfigs {
+        release {
+            storeFile file("release.jks")
+            storePassword System.getenv("KEYSTORE_PASSWORD")
+            keyAlias System.getenv("KEY_ALIAS")
+            keyPassword System.getenv("KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        release { signingConfig signingConfigs.release }
+    }
+}
+EOF
+            ( cd android && ./gradlew assembleRelease --no-daemon )
+            cp android/app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/knowhub.apk"
+          else
+            echo "Building debug APK (no keystore secret)…"
+            ( cd android && ./gradlew assembleDebug --no-daemon )
+            cp android/app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/knowhub.apk"
+          fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
