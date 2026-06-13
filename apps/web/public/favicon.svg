@@ -6,6 +6,11 @@
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="16" fill="url(#g)"/>
-  <path d="M20 18h13a7 7 0 0 1 7 7v21a6 6 0 0 0-6-6H20z" fill="#fff" opacity="0.95"/>
-  <path d="M44 18H31a7 7 0 0 0-7 7v21a6 6 0 0 1 6-6h14z" fill="#fff" opacity="0.55"/>
+  <!-- lucide book-open-check, scaled and centered, to match Logo.tsx -->
+  <g transform="translate(12,12) scale(1.667)" fill="none" stroke="#ffffff"
+     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 21V7"/>
+    <path d="m16 12 2 2 4-4"/>
+    <path d="M22 6V4a1 1 0 0 0-1-1h-5a4 4 0 0 0-4 4 4 4 0 0 0-4-4H3a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h6a3 3 0 0 1 3 3 3 3 0 0 1 3-3h6a1 1 0 0 0 1-1v-1.3"/>
+  </g>
 </svg>

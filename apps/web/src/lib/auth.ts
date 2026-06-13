@@ -9,6 +9,7 @@ import {
   type Auth,
   type User,
 } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
 // Firebase Google authentication (spec 10). Entirely optional: if the
 // VITE_FIREBASE_* env vars are not set, KnowHub runs in local mode with no
@@ -30,9 +31,20 @@ export const isAuthConfigured = Boolean(
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
+export let db: Firestore | null = null;
 if (isAuthConfigured) {
   app = initializeApp(config as Required<typeof config>);
   auth = getAuth(app);
+  db = getFirestore(app);
+}
+
+/** Non-hook auth subscription (for the sync layer). Calls back with null in local mode. */
+export function subscribeAuth(cb: (user: User | null) => void): () => void {
+  if (!auth) {
+    cb(null);
+    return () => {};
+  }
+  return onAuthStateChanged(auth, cb);
 }
 
 export async function signInWithGoogle(): Promise<void> {

@@ -192,9 +192,9 @@ export default function SettingsPage() {
         </div>
 
         <p className="mt-4 text-xs text-slate-500">
-          Keys are stored only in this browser (this device) and sent over HTTPS to
-          KnowHub's backend per request. They are never committed or shared. For use across
-          devices, add them on each device — cross-device sync arrives with accounts.
+          When you're signed in, your keys and all your data are saved to your account and
+          sync across every device and the Android app. Signed out, they're stored only in
+          this browser. Keys are sent over HTTPS per request and never committed or shared.
         </p>
       </section>
     </div>

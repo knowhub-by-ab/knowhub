@@ -21,6 +21,19 @@ multi-provider with automatic fallback, keys stored as Cloudflare Pages secrets.
 no card, always-on, no CORS. A custom OpenAI-compatible endpoint can be set in Settings
 as an optional PRIMARY (built-in remains the fallback). Matches spec 02/18.
 
+## DEC-007 -- Cross-device sync via Firestore (2026-06-13)
+- Decision: when signed in (Firebase), mirror the whole local-first AppData to Firestore
+  at `users/{uid}` (`src/lib/sync.ts`): remote-wins on initial load, debounced writes on
+  change, and onSnapshot for real-time updates from other devices. Local mode (signed out
+  / unconfigured) keeps using localStorage only.
+- Reasoning: the user expects keys + data to follow their account across web and the
+  Android app. Firebase auth is already set up, and Firestore is free (no card). Avoids a
+  separate backend for now. (GitHub repo sync remains a future content-portability layer
+  per spec 09.)
+- Consequences: provider keys are stored in the user's Firestore doc (readable only by
+  them via security rules). Bundle grew (~227 kB gz) -> code-split as KH-DEBT-002.
+- Rollback: sign out (local-only); or remove initSync().
+
 ## DEC-006 -- External AI proxy removed entirely (2026-06-13)
 - Decision: remove the external AI proxy from the project -- its local project folder, all
   deployment configs/guides (Oracle, Render, Litestream, Filebase), and every code/doc

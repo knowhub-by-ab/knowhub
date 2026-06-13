@@ -100,6 +100,34 @@ export function useAppData(): AppData {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
+// --- Sync hooks (used by the Firestore cloud-sync layer) --------------------
+
+/** Current full state (for the sync writer). */
+export function getState(): AppData {
+  return state;
+}
+
+/** Subscribe to any state change (returns an unsubscribe fn). */
+export const subscribeStore = subscribe;
+
+/**
+ * Replace the entire store (used when loading from / receiving cloud data).
+ * Merges onto defaults so missing fields are filled.
+ */
+export function replaceAll(next: Partial<AppData>) {
+  setState((prev) => ({
+    ...structuredClone(DEFAULT_DATA),
+    ...prev,
+    ...next,
+    nodes: next.nodes ?? [],
+    pages: next.pages ?? {},
+    notes: next.notes ?? "",
+    resources: next.resources ?? [],
+    quizzes: next.quizzes ?? [],
+    aiKeys: next.aiKeys ?? [],
+  }));
+}
+
 // --- ID helper ---
 function uid(): string {
   return (

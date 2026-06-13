@@ -9,6 +9,10 @@ import ModulePlaceholderPage from "@/pages/ModulePlaceholderPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import { MODULES } from "@/lib/modules";
 import { IMPLEMENTED_MODULES } from "@/pages/moduleRegistry";
+import { initSync } from "@/lib/sync";
+
+// Start cloud sync (no-op until the user signs in with a configured Firebase).
+initSync();
 
 const router = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
