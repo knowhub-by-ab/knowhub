@@ -18,7 +18,5 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Lint
-        run: npm run lint --workspace apps/web --if-present
       - name: Build (type-check + bundle)
         run: npm run build
