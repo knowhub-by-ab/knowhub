@@ -78,6 +78,14 @@ export interface Quiz {
   createdAt: number;
 }
 
+export interface Note {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface GithubState {
   /** OAuth access token (repo scope). */
   token?: string;
@@ -94,8 +102,8 @@ export interface AppData {
   nodes: TreeNode[];
   /** Markdown learning page per node, keyed by node id (spec: Module 5). */
   pages: Record<string, string>;
-  /** Single global markdown notebook (spec: Module 13 / 14). */
-  notes: string;
+  /** Multiple titled markdown notes (spec: Module 13 / 14). */
+  notesList: Note[];
   /** Resource library (spec: Module 14). */
   resources: Resource[];
   /** MCQ assessments (spec: Module 9). */

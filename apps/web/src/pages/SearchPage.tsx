@@ -37,8 +37,16 @@ export default function SearchPage() {
         });
       }
     }
-    if (data.notes.trim()) {
-      out.push({ id: "note:global", title: "Notes", body: data.notes, type: "note", to: TYPE_META.note.to });
+    for (const n of data.notesList) {
+      if (n.title.trim() || n.body.trim()) {
+        out.push({
+          id: `note:${n.id}`,
+          title: n.title || "Untitled note",
+          body: n.body,
+          type: "note",
+          to: TYPE_META.note.to,
+        });
+      }
     }
     return out;
   }, [data]);

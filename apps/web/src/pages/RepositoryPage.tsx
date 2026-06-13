@@ -28,7 +28,7 @@ export default function RepositoryPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [repoName, setRepoName] = useState(gh.repo || "knowhub-learning");
+  const [repoName, setRepoName] = useState(gh.repo ?? "");
 
   // Handle the OAuth redirect (#gh=token or #gh_error=...).
   useEffect(() => {
@@ -107,7 +107,7 @@ export default function RepositoryPage() {
       replaceAll({
         nodes: snap.nodes,
         pages: snap.pages,
-        notes: snap.notes,
+        notesList: snap.notesList ?? [],
         resources: snap.resources,
         quizzes: snap.quizzes,
         aiKeys: data.aiKeys,

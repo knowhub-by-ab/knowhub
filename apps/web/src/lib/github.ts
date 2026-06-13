@@ -113,7 +113,7 @@ export interface KnowHubExport {
   exportedAt: string;
   nodes: AppData["nodes"];
   pages: AppData["pages"];
-  notes: AppData["notes"];
+  notesList: AppData["notesList"];
   resources: AppData["resources"];
   quizzes: AppData["quizzes"];
 }
@@ -124,10 +124,14 @@ export function buildExport(data: AppData): KnowHubExport {
     exportedAt: new Date().toISOString(),
     nodes: data.nodes,
     pages: data.pages,
-    notes: data.notes,
+    notesList: data.notesList,
     resources: data.resources,
     quizzes: data.quizzes,
   };
+}
+
+function safeName(s: string): string {
+  return (s.trim() || "untitled").replace(/[^\w.-]+/g, "-").slice(0, 60);
 }
 
 /** Push a full snapshot: knowhub.json + notes.md + knowledge/<id>.md per page. */
@@ -149,8 +153,17 @@ export async function syncToRepo(
     `knowhub: sync snapshot ${stamp}`
   );
 
-  onProgress?.("Writing notes.md…");
-  await putFile(token, owner, repo, "notes.md", data.notes || "_(empty)_", `notes: sync ${stamp}`);
+  onProgress?.("Writing notes…");
+  for (const note of data.notesList) {
+    await putFile(
+      token,
+      owner,
+      repo,
+      `notes/${safeName(note.title)}.md`,
+      `# ${note.title}\n\n${note.body}`,
+      `notes: ${note.title}`
+    );
+  }
 
   const pageIds = Object.keys(data.pages).filter((id) => data.pages[id]?.trim());
   let i = 0;

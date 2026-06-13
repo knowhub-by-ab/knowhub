@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Share2, Network } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
@@ -28,18 +28,29 @@ interface Pos {
 
 export default function KnowledgeGraphPage() {
   const data = useAppData();
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  const { positions, width, height, maxDepth, leaves } = useMemo(() => {
+  function toggle(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  const { positions, visible, width, height, maxDepth } = useMemo(() => {
     const nodes = data.nodes;
     const pos: Record<string, Pos> = {};
+    const vis: string[] = [];
     let leafCounter = 0;
     let maxD = 0;
 
     const layout = (nodeId: string, depth: number): number => {
       maxD = Math.max(maxD, depth);
+      vis.push(nodeId);
       const kids = tree.childrenOf(nodes, nodeId);
       let y: number;
-      if (kids.length === 0) {
+      if (kids.length === 0 || collapsed.has(nodeId)) {
         y = leafCounter++;
       } else {
         const ys = kids.map((k) => layout(k.id, depth + 1));
@@ -53,12 +64,12 @@ export default function KnowledgeGraphPage() {
 
     return {
       positions: pos,
+      visible: new Set(vis),
       maxDepth: maxD,
-      leaves: leafCounter,
       width: (maxD + 1) * COL_W + PAD * 2,
       height: Math.max(leafCounter, 1) * ROW_H + PAD * 2,
     };
-  }, [data.nodes]);
+  }, [data.nodes, collapsed]);
 
   const px = (p: Pos) => PAD + p.x * COL_W;
   const py = (p: Pos) => PAD + p.y * ROW_H;
@@ -69,6 +80,8 @@ export default function KnowledgeGraphPage() {
     return m;
   }, [data.nodes]);
 
+  const hasKids = (id: string) => data.nodes.some((n) => n.parentId === id);
+
   return (
     <div className="mx-auto max-w-6xl">
       <div className="flex items-center gap-3">
@@ -77,9 +90,7 @@ export default function KnowledgeGraphPage() {
         </span>
         <div>
           <h1 className="text-2xl font-bold text-white">Knowledge Graph</h1>
-          <p className="text-sm text-slate-400">
-            A map of your learning tree and how topics connect.
-          </p>
+          <p className="text-sm text-slate-400">A map of your topics. Tap a node to expand/collapse.</p>
         </div>
       </div>
 
@@ -91,32 +102,27 @@ export default function KnowledgeGraphPage() {
             <Link to="/app/learning-tree" className="text-brand-300 underline">
               Learning Tree
             </Link>{" "}
-            and they'll appear here as a graph.
+            and they'll appear here.
           </p>
         </div>
       ) : (
         <>
-          <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-400">
+          <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-400">
             <Legend color={STATUS_STROKE.pending} label="Pending" />
             <Legend color={STATUS_STROKE.in_progress} label="In progress" />
             <Legend color={STATUS_STROKE.completed} label="Completed" />
-            <span className="ml-auto">
-              {data.nodes.length} nodes · depth {maxDepth + 1} · {leaves} leaves
-            </span>
+            <span className="ml-auto">{data.nodes.length} nodes · depth {maxDepth + 1}</span>
           </div>
 
-          <div className="mt-3 overflow-auto rounded-2xl border border-white/10 bg-white/[0.02]">
-            <svg
-              width={width}
-              height={height}
-              viewBox={`0 0 ${width} ${height}`}
-              className="min-w-full"
-            >
-              {/* Edges */}
+          <div className="mt-3 max-h-[70vh] w-full touch-pan-x touch-pan-y overflow-auto rounded-2xl border border-white/10 bg-white/[0.02]">
+            <svg width={width} height={height} className="block">
+              {/* Edges (only between visible nodes) */}
               {data.nodes.map((n) => {
-                if (!n.parentId || !positions[n.id] || !positions[n.parentId]) return null;
+                if (!n.parentId) return null;
+                if (!visible.has(n.id) || !visible.has(n.parentId)) return null;
                 const c = positions[n.id];
                 const p = positions[n.parentId];
+                if (!c || !p) return null;
                 const x1 = px(p) + NODE_W;
                 const y1 = py(p) + NODE_H / 2;
                 const x2 = px(c);
@@ -134,16 +140,21 @@ export default function KnowledgeGraphPage() {
               })}
 
               {/* Nodes */}
-              {data.nodes.map((n) => {
-                const p = positions[n.id];
-                if (!p) return null;
+              {Array.from(visible).map((id) => {
+                const p = positions[id];
+                const node = byId[id];
+                if (!p || !node) return null;
                 const x = px(p);
                 const y = py(p);
-                const node = byId[n.id];
-                const label =
-                  node.title.length > 22 ? node.title.slice(0, 21) + "…" : node.title;
+                const kids = hasKids(id);
+                const isCollapsed = collapsed.has(id);
+                const label = node.title.length > 22 ? node.title.slice(0, 21) + "…" : node.title;
                 return (
-                  <g key={`n-${n.id}`}>
+                  <g
+                    key={`n-${id}`}
+                    onClick={() => kids && toggle(id)}
+                    style={{ cursor: kids ? "pointer" : "default" }}
+                  >
                     <rect
                       x={x}
                       y={y}
@@ -155,22 +166,31 @@ export default function KnowledgeGraphPage() {
                       stroke={STATUS_STROKE[node.status]}
                       strokeWidth={1.5}
                     />
-                    <text
-                      x={x + 12}
-                      y={y + NODE_H / 2 + 4}
-                      fontSize={13}
-                      fill="#e2e8f0"
-                    >
+                    <text x={x + 12} y={y + NODE_H / 2 + 4} fontSize={13} fill="#e2e8f0">
                       {label}
                     </text>
+                    {kids && (
+                      <>
+                        <circle cx={x + NODE_W - 14} cy={y + NODE_H / 2} r={8} fill="#0f172a" stroke="#64748b" />
+                        <text
+                          x={x + NODE_W - 14}
+                          y={y + NODE_H / 2 + 4}
+                          fontSize={13}
+                          textAnchor="middle"
+                          fill="#cbd5e1"
+                        >
+                          {isCollapsed ? "+" : "−"}
+                        </text>
+                      </>
+                    )}
                   </g>
                 );
               })}
             </svg>
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            Edges show prerequisite relationships (parent → child). Node colour reflects
-            status. Manage topics in the Learning Tree.
+            Lines show prerequisite relationships (parent → child). Colour = status. Scroll to
+            pan; tap a node with a +/− badge to expand or collapse its branch.
           </p>
         </>
       )}

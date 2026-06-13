@@ -1,6 +1,43 @@
-import { chatJSON } from "./ai";
+import { chatJSON, chatCompletion } from "./ai";
 import { tree, quizzes } from "./store";
 import type { ChatMessage, ProviderKey, Question } from "./types";
+
+function stripFences(s: string): string {
+  const m = s.trim().match(/^```(?:markdown|md)?\s*([\s\S]*?)```$/i);
+  return (m ? m[1] : s).trim();
+}
+
+/**
+ * Generate or revise the Markdown content of a learning page. `instruction` is
+ * the user's prompt (optional); `current` is the existing page content (for
+ * improve/edit). Returns Markdown.
+ */
+export async function generatePageContent(
+  keys: ProviderKey[],
+  title: string,
+  instruction: string,
+  current?: string
+): Promise<string> {
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You are KnowHub's content author. Produce a clear, well-structured Markdown " +
+        "learning page that takes a reader from beginner to professional. Use headings, " +
+        "short paragraphs, lists, examples and a 'Key takeaways' section. Output ONLY " +
+        "Markdown — no code fences around the whole document, no preamble.",
+    },
+    {
+      role: "user",
+      content:
+        `Topic / page title: "${title}".\n` +
+        (current?.trim() ? `\nCurrent content:\n"""\n${current}\n"""\n` : "") +
+        `\nInstruction: ${instruction.trim() || "Write a complete, accurate learning page for this topic."}`,
+    },
+  ];
+  const { content } = await chatCompletion(keys, messages);
+  return stripFences(content);
+}
 
 interface GenNode {
   title: string;

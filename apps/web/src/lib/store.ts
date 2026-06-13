@@ -9,6 +9,7 @@ import type {
   Question,
   ProviderKey,
   ProviderId,
+  Note,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -23,7 +24,7 @@ const DEFAULT_DATA: AppData = {
   version: 1,
   nodes: [],
   pages: {},
-  notes: "",
+  notesList: [],
   resources: [],
   quizzes: [],
   aiKeys: [],
@@ -36,9 +37,16 @@ function load(): AppData {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(DEFAULT_DATA);
     const parsed = JSON.parse(raw) as Partial<AppData> & {
-      // legacy shape (pre-key-list): a single custom endpoint
+      // legacy shapes
       settings?: { baseUrl?: string; apiKey?: string; model?: string };
+      notes?: string; // legacy single-note string
     };
+    // Migrate legacy single notes string into the notes list.
+    let notesList = parsed.notesList ?? [];
+    if (notesList.length === 0 && typeof parsed.notes === "string" && parsed.notes.trim()) {
+      const now = Date.now();
+      notesList = [{ id: "migrated", title: "My notes", body: parsed.notes, createdAt: now, updatedAt: now }];
+    }
     let aiKeys = parsed.aiKeys ?? [];
     // Migrate an old single custom endpoint into a `custom` key entry.
     if (aiKeys.length === 0 && parsed.settings?.baseUrl?.trim()) {
@@ -57,6 +65,7 @@ function load(): AppData {
       ...parsed,
       nodes: parsed.nodes ?? [],
       pages: parsed.pages ?? {},
+      notesList,
       resources: parsed.resources ?? [],
       quizzes: parsed.quizzes ?? [],
       aiKeys,
@@ -138,7 +147,7 @@ function merged(next: Partial<AppData>): AppData {
     ...next,
     nodes: next.nodes ?? [],
     pages: next.pages ?? {},
-    notes: next.notes ?? "",
+    notesList: next.notesList ?? [],
     resources: next.resources ?? [],
     quizzes: next.quizzes ?? [],
     aiKeys: next.aiKeys ?? [],
@@ -244,6 +253,46 @@ export const tree = {
       .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt);
   },
 
+  /** Reorder a node among its siblings (dir -1 = up, +1 = down). */
+  reorder(id: string, dir: -1 | 1) {
+    setState((prev) => {
+      const node = prev.nodes.find((n) => n.id === id);
+      if (!node) return prev;
+      const sibs = tree.childrenOf(prev.nodes, node.parentId);
+      const i = sibs.findIndex((n) => n.id === id);
+      const j = i + dir;
+      if (j < 0 || j >= sibs.length) return prev;
+      [sibs[i], sibs[j]] = [sibs[j], sibs[i]];
+      const orderById = new Map(sibs.map((n, idx) => [n.id, idx]));
+      return {
+        ...prev,
+        nodes: prev.nodes.map((n) =>
+          orderById.has(n.id) ? { ...n, order: orderById.get(n.id)! } : n
+        ),
+      };
+    });
+  },
+
+  /** Move a node under a new parent (null = root). Prevents cycles. */
+  reparent(id: string, newParentId: string | null) {
+    setState((prev) => {
+      if (id === newParentId) return prev;
+      // Disallow moving a node into itself or one of its descendants.
+      let p = newParentId;
+      while (p) {
+        if (p === id) return prev;
+        p = prev.nodes.find((n) => n.id === p)?.parentId ?? null;
+      }
+      const order = prev.nodes.filter((n) => n.parentId === newParentId).length;
+      return {
+        ...prev,
+        nodes: prev.nodes.map((n) =>
+          n.id === id ? { ...n, parentId: newParentId, order } : n
+        ),
+      };
+    });
+  },
+
   /** Depth-first flatten in display order, annotated with depth. */
   flatten(nodes: TreeNode[]): { node: TreeNode; depth: number }[] {
     const out: { node: TreeNode; depth: number }[] = [];
@@ -264,11 +313,27 @@ export function setPage(nodeId: string, markdown: string) {
   setState((prev) => ({ ...prev, pages: { ...prev.pages, [nodeId]: markdown } }));
 }
 
-// --- Notes ------------------------------------------------------------------
+// --- Notes (multiple, titled) -----------------------------------------------
 
-export function setNotes(notes: string) {
-  setState((prev) => ({ ...prev, notes }));
-}
+export const notes = {
+  add(title = "Untitled note"): Note {
+    const now = Date.now();
+    const n: Note = { id: uid(), title: title.trim() || "Untitled note", body: "", createdAt: now, updatedAt: now };
+    setState((prev) => ({ ...prev, notesList: [n, ...prev.notesList] }));
+    return n;
+  },
+  update(id: string, patch: Partial<Pick<Note, "title" | "body">>) {
+    setState((prev) => ({
+      ...prev,
+      notesList: prev.notesList.map((n) =>
+        n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n
+      ),
+    }));
+  },
+  remove(id: string) {
+    setState((prev) => ({ ...prev, notesList: prev.notesList.filter((n) => n.id !== id) }));
+  },
+};
 
 // --- Resources --------------------------------------------------------------
 

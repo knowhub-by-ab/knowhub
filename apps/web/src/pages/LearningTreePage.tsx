@@ -11,6 +11,10 @@ import {
   Network,
   Sparkles,
   Loader2,
+  ArrowUp,
+  ArrowDown,
+  IndentIncrease,
+  IndentDecrease,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
 import { generateLearningTree } from "@/lib/aiActions";
@@ -48,6 +52,14 @@ function NodeRow({
   const [childTitle, setChildTitle] = useState("");
 
   const hasChildren = children.length > 0;
+
+  // Rearrange helpers: position among siblings + indent/outdent targets.
+  const siblings = tree.childrenOf(nodes, node.parentId);
+  const idx = siblings.findIndex((s) => s.id === node.id);
+  const prevSibling = idx > 0 ? siblings[idx - 1] : null;
+  const grandparentId = node.parentId
+    ? nodes.find((n) => n.id === node.parentId)?.parentId ?? null
+    : null;
 
   return (
     <li>
@@ -115,6 +127,38 @@ function NodeRow({
             </button>
 
             <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+              <button
+                onClick={() => tree.reorder(node.id, -1)}
+                disabled={idx <= 0}
+                title="Move up"
+                className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-20"
+              >
+                <ArrowUp className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => tree.reorder(node.id, 1)}
+                disabled={idx >= siblings.length - 1}
+                title="Move down"
+                className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-20"
+              >
+                <ArrowDown className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => prevSibling && tree.reparent(node.id, prevSibling.id)}
+                disabled={!prevSibling}
+                title="Indent (make a sub-topic of the item above)"
+                className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-20"
+              >
+                <IndentIncrease className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => tree.reparent(node.id, grandparentId)}
+                disabled={!node.parentId}
+                title="Outdent (move out one level)"
+                className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-20"
+              >
+                <IndentDecrease className="h-3.5 w-3.5" />
+              </button>
               <button
                 onClick={() => {
                   setAdding(true);
