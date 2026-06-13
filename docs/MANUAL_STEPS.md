@@ -65,6 +65,30 @@ Create the Firebase project now; I'll add the login code, then you paste the key
 
 ---
 
+## B2. Cloud sync across devices (Firestore) 🟢 — needs Google Login (B) done first
+
+This makes your keys + all data follow your account to any device and the Android app.
+
+1. **https://console.firebase.google.com** → open your **knowhub** project.
+2. Left sidebar → **Build → Firestore Database** → **Create database**.
+3. Choose **Start in production mode** → **Next** → pick a **location** (closest to you) → **Enable**.
+4. Open the **Rules** tab, replace everything with this, then **Publish**:
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /users/{uid} {
+         allow read, write: if request.auth != null && request.auth.uid == uid;
+       }
+     }
+   }
+   ```
+   (This lets each signed-in user read/write only their own data.)
+5. That's it — no new env vars. Sign in on one device, add a key/topic; sign in on another
+   device and it's there. (Give it a few seconds to sync.)
+
+---
+
 ## C. GitHub Sync (your repo = your knowledge) 🟡 — needs a small backend
 
 This lets KnowHub save your trees/pages/notes into a GitHub repo you own. It needs
