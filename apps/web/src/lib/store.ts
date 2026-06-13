@@ -82,10 +82,30 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
+// Monotonic "last modified" stamp for last-write-wins cloud sync. Bumped on
+// every LOCAL change; set to the remote value when applying remote data.
+const STAMP_KEY = "knowhub:updatedAt:v1";
+let localUpdatedAt = Number(
+  (typeof localStorage !== "undefined" && localStorage.getItem(STAMP_KEY)) || 0
+);
+function persistStamp() {
+  try {
+    localStorage.setItem(STAMP_KEY, String(localUpdatedAt));
+  } catch {
+    /* ignore */
+  }
+}
+
 function setState(updater: (prev: AppData) => AppData) {
   state = updater(state);
+  localUpdatedAt = Date.now();
   persist();
+  persistStamp();
   emit();
+}
+
+export function getUpdatedAt(): number {
+  return localUpdatedAt;
 }
 
 function subscribe(listener: () => void) {
@@ -112,14 +132,9 @@ export function getState(): AppData {
 /** Subscribe to any state change (returns an unsubscribe fn). */
 export const subscribeStore = subscribe;
 
-/**
- * Replace the entire store (used when loading from / receiving cloud data).
- * Merges onto defaults so missing fields are filled.
- */
-export function replaceAll(next: Partial<AppData>) {
-  setState((prev) => ({
+function merged(next: Partial<AppData>): AppData {
+  return {
     ...structuredClone(DEFAULT_DATA),
-    ...prev,
     ...next,
     nodes: next.nodes ?? [],
     pages: next.pages ?? {},
@@ -128,7 +143,27 @@ export function replaceAll(next: Partial<AppData>) {
     quizzes: next.quizzes ?? [],
     aiKeys: next.aiKeys ?? [],
     github: next.github ?? {},
-  }));
+  };
+}
+
+/**
+ * Replace the entire store from a LOCAL action (e.g. GitHub import). Bumps the
+ * updated-at stamp to now so it wins the next sync.
+ */
+export function replaceAll(next: Partial<AppData>) {
+  setState(() => merged(next));
+}
+
+/**
+ * Apply remote cloud data WITHOUT bumping the stamp past the remote value, so
+ * last-write-wins stays correct. Used only by the sync layer.
+ */
+export function applyRemoteState(next: Partial<AppData>, remoteUpdatedAt: number) {
+  state = merged(next);
+  localUpdatedAt = remoteUpdatedAt;
+  persist();
+  persistStamp();
+  emit();
 }
 
 /** Update the GitHub connection state (merged). */
