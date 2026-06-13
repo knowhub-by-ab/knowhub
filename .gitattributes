@@ -1,0 +1,5 @@
+# Shell scripts must stay LF or they break on Linux CI runners.
+*.sh text eol=lf
+# Gradle wrapper / yml also prefer LF
+*.yml text eol=lf
+gradlew text eol=lf
