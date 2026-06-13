@@ -2,12 +2,19 @@ import { useRef, useState } from "react";
 import { MessagesSquare, Send, Loader2 } from "lucide-react";
 import { useAppData } from "@/lib/store";
 import { chatStream, AiError } from "@/lib/ai";
+import { buildTutorContext } from "@/lib/aiActions";
 import type { ChatMessage } from "@/lib/types";
 
 const SYSTEM_PROMPT: ChatMessage = {
   role: "system",
   content:
-    "You are KnowHub's AI tutor. Explain clearly, progressing from beginner to professional. Be concise, use examples, and suggest next topics to learn.",
+    "You are KnowHub's AI tutor. You are given the learner's own topic tree and the " +
+    "content of their relevant learning pages as context. " +
+    "If a relevant page already exists, answer from it and point the learner to it by " +
+    "name (e.g. “see your page: X”). If the topic is NOT in their tree, briefly say " +
+    "where it would fit in their hierarchy and suggest they create it — they can tap " +
+    "Generate on the Learning Pages tab, or add it in the Learning Tree. " +
+    "Explain clearly from beginner to professional, be concise, and use examples.",
 };
 
 export default function AiChatPage() {
@@ -32,8 +39,9 @@ export default function AiChatPage() {
     setLoading(true);
     let acc = "";
     setMessages([...next, { role: "assistant", content: "" }]);
+    const context: ChatMessage = { role: "system", content: buildTutorContext(data, text) };
     try {
-      await chatStream(data.aiKeys, [SYSTEM_PROMPT, ...next], (piece) => {
+      await chatStream(data.aiKeys, [SYSTEM_PROMPT, context, ...next], (piece) => {
         acc += piece;
         setMessages([...next, { role: "assistant", content: acc }]);
         endRef.current?.scrollIntoView({ behavior: "smooth" });

@@ -1,6 +1,42 @@
 import { chatJSON, chatCompletion } from "./ai";
 import { tree, quizzes } from "./store";
-import type { ChatMessage, ProviderKey, Question } from "./types";
+import type { AppData, ChatMessage, ProviderKey, Question } from "./types";
+
+/**
+ * Build a context string for the AI Tutor: an outline of the learner's topic
+ * tree (marking which topics already have a written page) plus the content of
+ * any existing pages relevant to the question. Lets the tutor point to existing
+ * pages or suggest where a new one fits.
+ */
+export function buildTutorContext(data: AppData, query: string): string {
+  const flat = tree.flatten(data.nodes);
+  const outline =
+    flat
+      .map(
+        ({ node, depth }) =>
+          `${"  ".repeat(depth)}- ${node.title}${data.pages[node.id]?.trim() ? "  [has page]" : ""}`
+      )
+      .join("\n")
+      .slice(0, 4000) || "(empty — the learner has no topics yet)";
+
+  const q = query.toLowerCase();
+  const relevant = data.nodes.filter((n) => {
+    if (!data.pages[n.id]?.trim()) return false;
+    const t = n.title.toLowerCase();
+    return q.includes(t) || t.split(/\s+/).some((w) => w.length > 3 && q.includes(w));
+  });
+  const pages = relevant
+    .slice(0, 3)
+    .map((n) => `### ${n.title}\n${(data.pages[n.id] || "").slice(0, 1500)}`)
+    .join("\n\n");
+
+  return (
+    `Learner's topic tree ("[has page]" = a written page exists):\n${outline}\n\n` +
+    (pages
+      ? `Relevant existing page content:\n${pages}`
+      : "No existing page closely matches this question.")
+  );
+}
 
 function stripFences(s: string): string {
   const m = s.trim().match(/^```(?:markdown|md)?\s*([\s\S]*?)```$/i);

@@ -26,6 +26,8 @@ function PickerNode({
   selectedId,
   onSelect,
   hasPage,
+  checked,
+  onToggleCheck,
 }: {
   node: TreeNode;
   nodes: TreeNode[];
@@ -33,6 +35,8 @@ function PickerNode({
   selectedId: string | null;
   onSelect: (id: string) => void;
   hasPage: (id: string) => boolean;
+  checked: Set<string>;
+  onToggleCheck: (id: string) => void;
 }) {
   const children = tree.childrenOf(nodes, node.id);
   const [expanded, setExpanded] = useState(true);
@@ -53,6 +57,13 @@ function PickerNode({
         >
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
+        <input
+          type="checkbox"
+          checked={checked.has(node.id)}
+          onChange={() => onToggleCheck(node.id)}
+          className="h-3.5 w-3.5 shrink-0 accent-violet-500"
+          title="Select for batch AI generation"
+        />
         <button
           onClick={() => onSelect(node.id)}
           className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left text-sm text-slate-200"
@@ -76,6 +87,8 @@ function PickerNode({
               selectedId={selectedId}
               onSelect={onSelect}
               hasPage={hasPage}
+              checked={checked}
+              onToggleCheck={onToggleCheck}
             />
           ))}
         </ul>
@@ -99,6 +112,46 @@ export default function LearningPagesPage() {
   const [prompt, setPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // Batch generation
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [batch, setBatch] = useState<{ running: boolean; done: number; total: number; error: string | null }>(
+    { running: false, done: 0, total: 0, error: null }
+  );
+  const toggleCheck = (id: string) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  async function batchGenerate() {
+    const ids = [...checked];
+    if (!ids.length || batch.running) return;
+    setBatch({ running: true, done: 0, total: ids.length, error: null });
+    const failed: string[] = [];
+    let done = 0;
+    for (const id of ids) {
+      const n = data.nodes.find((x) => x.id === id);
+      if (n) {
+        try {
+          const md = await generatePageContent(
+            data.aiKeys,
+            n.title,
+            `Write a complete learning page for "${n.title}".`
+          );
+          setPage(id, md);
+          if (id === selectedId) setDraft(md);
+        } catch {
+          failed.push(n.title);
+        }
+      }
+      done++;
+      setBatch((b) => ({ ...b, done }));
+    }
+    setBatch({ running: false, done, total: ids.length, error: failed.length ? `Failed: ${failed.join(", ")}` : null });
+    setChecked(new Set());
+  }
 
   useEffect(() => {
     if (!selectedId && flat.length) setSelectedId(flat[0].node.id);
@@ -184,7 +237,28 @@ export default function LearningPagesPage() {
         <div className="mt-6 grid gap-4 lg:grid-cols-[260px_1fr]">
           {/* Collapsible picker */}
           <aside className="rounded-2xl border border-white/10 bg-white/[0.03] p-2">
-            <ul className="max-h-[65vh] overflow-y-auto">
+            {/* Batch generate toolbar */}
+            <div className="mb-1 flex items-center justify-between gap-2 px-1">
+              <span className="text-xs text-slate-500">
+                {checked.size > 0 ? `${checked.size} selected` : "Tick topics to batch-generate"}
+              </span>
+              <button
+                onClick={batchGenerate}
+                disabled={checked.size === 0 || batch.running}
+                className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-40"
+                title="Generate pages for the selected topics"
+              >
+                {batch.running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Generate
+              </button>
+            </div>
+            {batch.running && (
+              <p className="px-1 pb-1 text-xs text-brand-200">
+                Generating {batch.done}/{batch.total}…
+              </p>
+            )}
+            {batch.error && <p className="px-1 pb-1 text-xs text-rose-300">{batch.error}</p>}
+            <ul className="max-h-[60vh] overflow-y-auto">
               {roots.map((n) => (
                 <PickerNode
                   key={n.id}
@@ -194,6 +268,8 @@ export default function LearningPagesPage() {
                   selectedId={selectedId}
                   onSelect={setSelectedId}
                   hasPage={(id) => Boolean(data.pages[id]?.trim())}
+                  checked={checked}
+                  onToggleCheck={toggleCheck}
                 />
               ))}
             </ul>

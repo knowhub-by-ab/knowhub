@@ -106,7 +106,7 @@ export default function AppLayout() {
         </aside>
 
         {/* Main content */}
-        <main className="min-h-screen flex-1 px-4 py-6 sm:px-8">
+        <main className="min-h-screen min-w-0 flex-1 px-4 py-6 sm:px-8">
           <Suspense
             fallback={
               <div className="flex items-center gap-2 py-10 text-sm text-slate-500">

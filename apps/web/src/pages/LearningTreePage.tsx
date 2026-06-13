@@ -50,6 +50,7 @@ function NodeRow({
   const [draft, setDraft] = useState(node.title);
   const [adding, setAdding] = useState(false);
   const [childTitle, setChildTitle] = useState("");
+  const [dragOver, setDragOver] = useState(false);
 
   const hasChildren = children.length > 0;
 
@@ -64,8 +65,32 @@ function NodeRow({
   return (
     <li>
       <div
-        className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5"
+        draggable={!editing}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", node.id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (!dragOver) setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOver(false);
+          const src = e.dataTransfer.getData("text/plain");
+          if (src && src !== node.id) {
+            tree.reparent(src, node.id);
+            setExpanded(true);
+          }
+        }}
+        className={`group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5 ${
+          dragOver ? "ring-1 ring-brand-400 bg-brand-600/10" : ""
+        }`}
         style={{ paddingLeft: `${depth * 18 + 8}px` }}
+        title="Drag onto another topic to make it a sub-topic"
       >
         <button
           onClick={() => setExpanded((v) => !v)}
@@ -352,7 +377,15 @@ export default function LearningTreePage() {
         )}
       </div>
 
-      <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+      <div
+        className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const src = e.dataTransfer.getData("text/plain");
+          if (src) tree.reparent(src, null); // dropped on empty area → top level
+        }}
+      >
         {roots.length === 0 ? (
           <div className="py-12 text-center text-sm text-slate-500">
             No topics yet. Add your first top-level topic above to start building your
@@ -367,7 +400,9 @@ export default function LearningTreePage() {
         )}
       </div>
       <p className="mt-3 text-xs text-slate-500">
-        Saved automatically in your browser. GitHub sync arrives in a later phase.
+        Tip: use ↑/↓ to reorder, the indent/outdent buttons to change level, or{" "}
+        <strong>drag a topic onto another</strong> to nest it (drop on empty space for top
+        level). Saved automatically and synced to your account.
       </p>
     </div>
   );
