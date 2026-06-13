@@ -86,7 +86,8 @@ interface GenNode {
  */
 export async function generateLearningTree(
   keys: ProviderKey[],
-  topic: string
+  topic: string,
+  parentId: string | null = null
 ): Promise<number> {
   const messages: ChatMessage[] = [
     { role: "system", content: "You output ONLY valid JSON. No prose, no code fences." },
@@ -100,21 +101,91 @@ export async function generateLearningTree(
     },
   ];
   const data = await chatJSON<GenNode[] | { topics?: GenNode[] }>(keys, messages);
-  const roots = Array.isArray(data) ? data : data.topics ?? [];
-  if (!roots.length) throw new Error("The AI returned no topics. Try again.");
+  const topics = Array.isArray(data) ? data : data.topics ?? [];
+  if (!topics.length) throw new Error("The AI returned no topics. Try again.");
 
-  const rootId = tree.add(topic, null).id;
-  let count = 1;
-  const insert = (nodes: GenNode[], parentId: string, depth: number) => {
+  let count = 0;
+  // Attach under the chosen parent. If none, create one new root named `topic`
+  // and nest the generated topics beneath it.
+  let baseParent: string | null;
+  if (parentId) {
+    baseParent = parentId;
+  } else {
+    baseParent = tree.add(topic, null).id;
+    count = 1;
+  }
+
+  const insert = (nodes: GenNode[], pid: string, depth: number) => {
     if (depth > 4) return;
     for (const n of nodes) {
       if (!n?.title) continue;
-      const id = tree.add(String(n.title).slice(0, 120), parentId).id;
+      const id = tree.add(String(n.title).slice(0, 120), pid).id;
       count++;
       if (Array.isArray(n.children) && n.children.length) insert(n.children, id, depth + 1);
     }
   };
-  insert(roots, rootId, 1);
+  insert(topics, baseParent, 1);
+  return count;
+}
+
+interface Addition {
+  parentId?: string | null;
+  title: string;
+  children?: GenNode[];
+}
+
+/**
+ * Agentic tree edit: given the user's prompt AND the existing tree (with ids),
+ * the AI decides what topics to add and WHERE (under an existing node, or as a
+ * new top-level topic). Applies the additions and returns how many were created.
+ */
+export async function generateTreeChanges(
+  keys: ProviderKey[],
+  prompt: string,
+  nodes: AppData["nodes"]
+): Promise<number> {
+  const outline = nodes.length
+    ? tree
+        .flatten(nodes)
+        .map(({ node, depth }) => `${"  ".repeat(depth)}- [${node.id}] ${node.title}`)
+        .join("\n")
+    : "(the tree is currently empty)";
+
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You edit a learner's topic tree. Output ONLY JSON of this shape: " +
+        '{"additions":[{"parentId": string|null, "title": string, "children"?: ' +
+        '[{"title": string, "children"?: [...]}]}]}. ' +
+        "`parentId` MUST be one of the [id] values shown in the tree (to nest under an " +
+        "existing topic), or null to create a new top-level topic. Decide placement from " +
+        "the request and the existing structure: nest related topics under the most " +
+        "relevant existing node; only use null when nothing fits. Use `children` for new " +
+        "sub-topics. Do NOT recreate topics that already exist. Keep titles short.",
+    },
+    {
+      role: "user",
+      content: `Existing tree (each line is "- [id] Title"):\n${outline}\n\nRequest: ${prompt}`,
+    },
+  ];
+
+  const data = await chatJSON<{ additions?: Addition[] }>(keys, messages);
+  const additions = data.additions ?? [];
+  if (!additions.length) throw new Error("The AI didn't propose any changes. Try rephrasing.");
+
+  const valid = new Set(nodes.map((n) => n.id));
+  let count = 0;
+  const addItem = (title: string, parentId: string | null, children?: GenNode[], depth = 1) => {
+    const id = tree.add(String(title).slice(0, 120), parentId).id;
+    count++;
+    if (depth <= 5) for (const c of children ?? []) if (c?.title) addItem(c.title, id, c.children, depth + 1);
+  };
+  for (const a of additions) {
+    if (!a?.title) continue;
+    const pid = a.parentId && valid.has(a.parentId) ? a.parentId : null;
+    addItem(a.title, pid, a.children);
+  }
   return count;
 }
 

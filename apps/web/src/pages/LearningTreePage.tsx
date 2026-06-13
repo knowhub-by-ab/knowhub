@@ -17,7 +17,7 @@ import {
   IndentDecrease,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
-import { generateLearningTree } from "@/lib/aiActions";
+import { generateLearningTree, generateTreeChanges } from "@/lib/aiActions";
 import {
   STATUS_LABELS,
   STATUS_CYCLE,
@@ -279,8 +279,10 @@ export default function LearningTreePage() {
   const roots = tree.childrenOf(data.nodes, null);
   const [newRoot, setNewRoot] = useState("");
   const [genTopic, setGenTopic] = useState("");
+  const [genParent, setGenParent] = useState<string>("");
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const flat = tree.flatten(data.nodes);
 
   function addRoot() {
     if (newRoot.trim()) {
@@ -295,7 +297,16 @@ export default function LearningTreePage() {
     setGenError(null);
     setGenLoading(true);
     try {
-      await generateLearningTree(data.aiKeys, topic);
+      if (genParent === "__force_top__") {
+        // Force a brand-new top-level topic + its sub-tree.
+        await generateLearningTree(data.aiKeys, topic, null);
+      } else if (genParent) {
+        // Force everything under the chosen existing node.
+        await generateLearningTree(data.aiKeys, topic, genParent);
+      } else {
+        // Default: let the AI decide what to add and where.
+        await generateTreeChanges(data.aiKeys, topic, data.nodes);
+      }
       setGenTopic("");
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Generation failed.");
@@ -336,10 +347,34 @@ export default function LearningTreePage() {
 
       {/* Generate with AI */}
       <div className="mt-3 rounded-xl border border-brand-500/30 bg-brand-500/5 p-3">
+        {flat.length > 0 && (
+          <label className="mb-2 block text-xs text-slate-400">
+            Placement
+            <select
+              value={genParent}
+              onChange={(e) => setGenParent(e.target.value)}
+              disabled={genLoading}
+              className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+            >
+              <option value="">Let AI decide where (recommended)</option>
+              <option value="__force_top__">Force: new top-level topic</option>
+              {flat.map(({ node, depth }) => (
+                <option key={node.id} value={node.id}>
+                  {"  ".repeat(depth)}
+                  ↳ under {node.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
             value={genTopic}
-            placeholder="Generate a full learning path with AI, e.g. 'Kubernetes'…"
+            placeholder={
+              genParent && genParent !== "__force_top__"
+                ? "What to add here, e.g. 'networking & storage'…"
+                : "Tell AI what to add, e.g. 'add CI/CD under DevOps' or 'create a Data Science path'…"
+            }
             onChange={(e) => setGenTopic(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && generate()}
             disabled={genLoading}
