@@ -19,8 +19,13 @@
 - [x] KH-021 -- AI backend = built-in Cloudflare Pages Function (multi-provider + fallback).
 - [x] KH-022 -- Remove the external AI proxy entirely (DEC-006).
 
+## Done (cont.)
+- [x] KH-006 -- Firebase Google Sign-In + auth-gated `/app` (graceful: app runs without
+      config; gate activates when VITE_FIREBASE_* env is set). User adds Firebase keys.
+- [x] KH-023a -- AI "Generate" actions (learning tree + quiz from a topic).
+
 ## Next
-- [ ] KH-006 -- Firebase Google Sign-In + auth-gated `/app` (spec 10). Needs user's Firebase keys.
+- [ ] KH-DEBT-002 -- Code-split (Firebase + marked + minisearch pushed JS >500 kB).
 - [ ] KH-008 -- GitHub OAuth + connect/create repo + read/write/sync = Repository module
       (spec 09). Needs a backend (Pages Function) + login.
 - [ ] KH-023 -- AI Tutor streaming + "generate tree/page/quiz into draft" actions.

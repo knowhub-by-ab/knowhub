@@ -1,14 +1,27 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogOut, Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
+import LoginScreen from "@/components/LoginScreen";
 import { DASHBOARD, MODULES } from "@/lib/modules";
+import { isAuthConfigured, signOutUser, useAuth } from "@/lib/auth";
 
 const navItems = [DASHBOARD, ...MODULES];
 
 export default function AppLayout() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { loading, user } = useAuth();
+
+  // When auth is configured, gate the app behind Google sign-in.
+  if (isAuthConfigured && loading) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-aurora">
+        <Loader2 className="h-6 w-6 animate-spin text-brand-300" />
+      </div>
+    );
+  }
+  if (isAuthConfigured && !user) return <LoginScreen />;
 
   return (
     <div className="min-h-screen bg-aurora">
@@ -63,6 +76,33 @@ export default function AppLayout() {
               );
             })}
           </nav>
+
+          {user && (
+            <div className="mt-6 flex items-center gap-2 border-t border-white/10 pt-4">
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt=""
+                  className="h-8 w-8 rounded-full"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-600/30 text-xs font-semibold text-brand-200">
+                  {(user.displayName || user.email || "?").slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-xs text-slate-400">
+                {user.displayName || user.email}
+              </span>
+              <button
+                onClick={() => signOutUser()}
+                title="Sign out"
+                className="rounded p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* Main content */}

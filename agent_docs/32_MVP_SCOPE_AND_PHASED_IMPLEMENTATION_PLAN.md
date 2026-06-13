@@ -336,7 +336,7 @@ Knowledge Expansion Suggestions
 Provider Support:
 
 ```text
-FreeLLMAPI
+the KnowHub AI gateway
 
 Gemini API Key
 
@@ -791,7 +791,7 @@ Future Providers
 
 ---
 
-Only if FreeLLMAPI limits are exceeded.
+Only if the KnowHub AI gateway limits are exceeded.
 
 ---
 
