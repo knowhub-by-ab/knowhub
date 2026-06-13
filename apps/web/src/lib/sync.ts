@@ -3,15 +3,33 @@ import { db, subscribeAuth } from "./auth";
 import { getState, replaceAll, subscribeStore } from "./store";
 import type { AppData } from "./types";
 
-// Cloud sync (spec 02/18). When the user is signed in (Firebase), the whole
-// local-first AppData is mirrored to Firestore at users/{uid}, so keys and all
-// learning data follow the account across devices and the Android app. In local
-// mode (no auth configured / signed out) the app uses localStorage only.
+// Cloud sync (spec 02/18). When the user is signed in (Firebase), the local-first
+// AppData is mirrored to Firestore at users/{uid}, so data follows the account
+// across devices and the Android app. In local mode (no auth / signed out) the
+// app uses localStorage only.
+//
+// NOTE: the GitHub connection (github.token etc.) is intentionally NOT synced —
+// OAuth tokens are device-scoped and shouldn't be stored in Firestore. It stays
+// in localStorage on each device, and remote updates never overwrite it.
 
 let stopWriter: () => void = () => {};
 let stopSnapshot: () => void = () => {};
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let applyingRemote = false;
+
+/** The portion of state we mirror to the cloud (everything except github). */
+function syncedPart(): Omit<AppData, "github"> {
+  const { github: _omit, ...rest } = getState();
+  void _omit;
+  return rest;
+}
+
+/** Apply remote data while preserving this device's local GitHub connection. */
+function applyRemote(remote: Partial<AppData>) {
+  applyingRemote = true;
+  replaceAll({ ...remote, github: getState().github });
+  applyingRemote = false;
+}
 
 function clearWatchers() {
   stopWriter();
@@ -29,39 +47,35 @@ export function initSync(): void {
 
     const ref = doc(db, "users", user.uid);
 
-    // 1. Initial load: remote wins if it exists; otherwise seed from local.
     try {
       const snap = await getDoc(ref);
       const remote = snap.exists() ? (snap.data().data as AppData | undefined) : undefined;
       if (remote) {
-        applyingRemote = true;
-        replaceAll(remote);
-        applyingRemote = false;
+        applyRemote(remote);
       } else {
-        await setDoc(ref, { data: getState(), updatedAt: Date.now() });
+        await setDoc(ref, { data: syncedPart(), updatedAt: Date.now() });
       }
     } catch {
-      // offline / rules issue — keep working locally; writer will retry on change.
+      // offline / rules issue — keep working locally; writer retries on change.
     }
 
-    // 2. Write local changes up (debounced).
+    // Write local changes up (debounced), excluding the GitHub connection.
     stopWriter = subscribeStore(() => {
       if (applyingRemote) return;
       if (writeTimer) clearTimeout(writeTimer);
       writeTimer = setTimeout(() => {
-        setDoc(ref, { data: getState(), updatedAt: Date.now() }).catch(() => {});
+        setDoc(ref, { data: syncedPart(), updatedAt: Date.now() }).catch(() => {});
       }, 800);
     });
 
-    // 3. Receive changes from other devices in real time.
-    stopSnapshot = onSnapshot(ref, (snap) => {
-      if (snap.metadata.hasPendingWrites) return; // ignore our own writes
-      const remote = snap.data()?.data as AppData | undefined;
+    // Receive changes from other devices.
+    stopSnapshot = onSnapshot(ref, (s) => {
+      if (s.metadata.hasPendingWrites) return; // ignore our own writes
+      const remote = s.data()?.data as AppData | undefined;
       if (!remote) return;
-      if (JSON.stringify(remote) === JSON.stringify(getState())) return;
-      applyingRemote = true;
-      replaceAll(remote);
-      applyingRemote = false;
+      // Compare against synced part only (github is local-only).
+      if (JSON.stringify(remote) === JSON.stringify(syncedPart())) return;
+      applyRemote(remote);
     });
   });
 }
