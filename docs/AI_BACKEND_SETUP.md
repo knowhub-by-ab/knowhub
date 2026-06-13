@@ -34,14 +34,18 @@ Pick one (or do both for fallback):
 
    | If you got a key from… | Variable name (exactly) | Value |
    | --- | --- | --- |
-   | Google Gemini | `GEMINI_API_KEY` | your `AIza…` key |
+   | Google Gemini | `GEMINI_API_KEY` | your `AIza…` key(s) |
    | Groq | `GROQ_API_KEY` | your `gsk_…` key |
    | OpenRouter | `OPENROUTER_API_KEY` | your key |
    | OpenAI | `OPENAI_API_KEY` | your key |
+   | ApiFreeLLM | `APIFREELLM_API_KEY` | your `apf_…` key |
+
+   **Provider/fallback order:** Gemini → Groq → OpenRouter → OpenAI → ApiFreeLLM.
+   ApiFreeLLM is last because it's slower (≈1 request / 20 s) — a good safety net.
 
    - **Multiple keys for one provider?** Put them comma-separated in the same
-     variable, e.g. `GEMINI_API_KEY = AIza_one,AIza_two`. The backend rotates/falls
-     back across them.
+     variable, e.g. `GEMINI_API_KEY = AIza_one,AIza_two,…` (up to as many as you have —
+     9 across 3 projects is plenty). The backend rotates/falls back across them in order.
    - You can add several providers at once; the backend tries them in order
      (Gemini → Groq → OpenRouter → OpenAI by default).
 4. Click **Save**.
