@@ -22,6 +22,12 @@ apps/web/ios/
 .env.local
 .env.*.local
 
+# Local secrets folder (google-services.json, keystores, etc.) — never commit
+/secrets/
+*.jks
+*.keystore
+google-services.json
+
 # Logs
 *.log
 npm-debug.log*
