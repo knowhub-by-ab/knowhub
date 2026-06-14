@@ -71,7 +71,7 @@ export default function NotesPage() {
       ) : (
         <div className="mt-6 grid gap-4 lg:grid-cols-[240px_1fr]">
           {/* Note list */}
-          <aside className="rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+          <aside className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
             <ul className="max-h-[60vh] space-y-1 overflow-y-auto">
               {list.map((n) => (
                 <li key={n.id}>
@@ -92,7 +92,7 @@ export default function NotesPage() {
 
           {/* Editor */}
           {selected && (
-            <section className="rounded-2xl border border-white/10 bg-white/[0.03]">
+            <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03]">
               <div className="flex items-center gap-2 border-b border-white/10 p-3">
                 <input
                   value={title}

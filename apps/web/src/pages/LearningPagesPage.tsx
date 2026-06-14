@@ -237,7 +237,7 @@ export default function LearningPagesPage() {
       ) : (
         <div className="mt-6 grid gap-4 lg:grid-cols-[260px_1fr]">
           {/* Collapsible picker */}
-          <aside className="rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+          <aside className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
             {/* Batch generate toolbar */}
             <div className="mb-2 space-y-2 px-1">
               <div className="text-xs text-slate-500">
@@ -281,10 +281,12 @@ export default function LearningPagesPage() {
           </aside>
 
           {/* Editor + AI */}
-          <section className="rounded-2xl border border-white/10 bg-white/[0.03]">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
-              <div className="truncate text-sm font-medium text-slate-200">{selectedTitle}</div>
-              <div className="flex items-center gap-2">
+          <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03]">
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2">
+              <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">
+                {selectedTitle}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
                 {savedAt && (
                   <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
                     <Check className="h-3.5 w-3.5" /> Saved
@@ -363,7 +365,10 @@ export default function LearningPagesPage() {
             ) : (
               <div className="min-h-[50vh] p-5">
                 {draft.trim() ? (
-                  <div className="md-prose" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                  <div
+                    className="md-prose max-w-full break-words"
+                    dangerouslySetInnerHTML={{ __html: previewHtml }}
+                  />
                 ) : (
                   <p className="text-sm text-slate-500">Nothing to preview yet.</p>
                 )}
