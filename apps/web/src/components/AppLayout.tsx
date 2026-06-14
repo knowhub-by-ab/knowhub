@@ -3,8 +3,10 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Menu, X, LogOut, Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
 import LoginScreen from "@/components/LoginScreen";
+import SyncButton from "@/components/SyncButton";
 import { DASHBOARD, MODULES } from "@/lib/modules";
 import { isAuthConfigured, signOutUser, useAuth } from "@/lib/auth";
+import { useAppData } from "@/lib/store";
 
 const navItems = [DASHBOARD, ...MODULES];
 
@@ -12,6 +14,8 @@ export default function AppLayout() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const { loading, user } = useAuth();
+  const data = useAppData();
+  const githubConnected = Boolean(data.github?.token && data.github?.login);
 
   // When auth is configured, gate the app behind Google sign-in.
   if (isAuthConfigured && loading) {
@@ -107,6 +111,11 @@ export default function AppLayout() {
 
         {/* Main content */}
         <main className="min-h-screen min-w-0 flex-1 px-4 py-6 sm:px-8">
+          {githubConnected && (
+            <div className="mb-3 flex justify-end">
+              <SyncButton />
+            </div>
+          )}
           <Suspense
             fallback={
               <div className="flex items-center gap-2 py-10 text-sm text-slate-500">

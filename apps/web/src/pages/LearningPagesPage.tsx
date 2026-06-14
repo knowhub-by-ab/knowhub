@@ -15,9 +15,17 @@ import { setPage, tree, useAppData } from "@/lib/store";
 import { renderMarkdown } from "@/lib/markdown";
 import { renderMermaidIn } from "@/lib/mermaid";
 import { generatePageContent } from "@/lib/aiActions";
-import type { TreeNode } from "@/lib/types";
+import { STATUS_LABELS, STATUS_CYCLE, type NodeStatus, type TreeNode } from "@/lib/types";
 
 type Tab = "edit" | "preview";
+
+const STATUS_STYLES: Record<NodeStatus, string> = {
+  pending: "bg-slate-600/30 text-slate-300 ring-slate-500/40",
+  in_progress: "bg-amber-500/20 text-amber-300 ring-amber-500/40",
+  completed: "bg-emerald-500/20 text-emerald-300 ring-emerald-500/40",
+};
+const nextStatus = (s: NodeStatus): NodeStatus =>
+  STATUS_CYCLE[(STATUS_CYCLE.indexOf(s) + 1) % STATUS_CYCLE.length];
 
 // --- Collapsible tree picker (mirrors the Learning Tree layout) -------------
 function PickerNode({
@@ -234,6 +242,7 @@ export default function LearningPagesPage() {
   }, [draft, selectedId, data.pages]);
 
   const selectedTitle = flat.find((f) => f.node.id === selectedId)?.node.title;
+  const selectedNode = data.nodes.find((n) => n.id === selectedId) ?? null;
   const previewHtml = useMemo(() => renderMarkdown(draft), [draft]);
 
   // Render any ```mermaid diagrams once the preview HTML is in the DOM.
@@ -344,6 +353,17 @@ export default function LearningPagesPage() {
                 {selectedTitle}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {selectedNode && (
+                  <button
+                    onClick={() => tree.setStatus(selectedNode.id, nextStatus(selectedNode.status))}
+                    title="Click to change progress"
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${
+                      STATUS_STYLES[selectedNode.status]
+                    }`}
+                  >
+                    {STATUS_LABELS[selectedNode.status]}
+                  </button>
+                )}
                 {savedAt && (
                   <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
                     <Check className="h-3.5 w-3.5" /> Saved
