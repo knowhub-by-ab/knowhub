@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   FileText,
   Check,
@@ -103,7 +103,57 @@ export default function LearningPagesPage() {
   const roots = useMemo(() => tree.childrenOf(data.nodes, null), [data.nodes]);
   const flat = useMemo(() => tree.flatten(data.nodes), [data.nodes]);
 
+  const [params, setParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(flat[0]?.node.id ?? null);
+
+  // Resolve a topic title (case-insensitive) to a node id.
+  function findByTitle(title: string): string | null {
+    const t = title.trim().toLowerCase();
+    return data.nodes.find((n) => n.title.toLowerCase() === t)?.id ?? null;
+  }
+
+  // Allow deep-linking to a page via ?topic=Title or ?node=id.
+  useEffect(() => {
+    const nodeParam = params.get("node");
+    if (nodeParam && data.nodes.some((n) => n.id === nodeParam)) {
+      setSelectedId(nodeParam);
+      return;
+    }
+    const topic = params.get("topic");
+    if (topic) {
+      const id = findByTitle(topic);
+      if (id) setSelectedId(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, data.nodes]);
+
+  // Intercept clicks on internal page links inside the preview so they select
+  // the target page instead of navigating to a non-existent file (404).
+  function onPreviewClick(e: React.MouseEvent<HTMLDivElement>) {
+    const anchor = (e.target as HTMLElement).closest("a");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href") || "";
+    let topic: string | null = null;
+    try {
+      const url = new URL(href, window.location.href);
+      topic = url.searchParams.get("topic");
+      // Also handle AI-style "./Some Title.md" links by using the file name.
+      if (!topic && /\.(md|html?)($|[?#])/i.test(href)) {
+        const file = decodeURIComponent(href.split(/[?#]/)[0].split("/").pop() || "");
+        topic = file.replace(/\.(md|html?)$/i, "");
+      }
+    } catch {
+      /* not a parseable URL */
+    }
+    if (!topic) return;
+    const id = findByTitle(topic);
+    if (id) {
+      e.preventDefault();
+      setSelectedId(id);
+      setParams({ topic });
+      setTab("preview");
+    }
+  }
   const [tab, setTab] = useState<Tab>("edit");
   const [draft, setDraft] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -374,6 +424,7 @@ export default function LearningPagesPage() {
                 {draft.trim() ? (
                   <div
                     ref={previewRef}
+                    onClick={onPreviewClick}
                     className="md-prose max-w-full break-words"
                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                   />
