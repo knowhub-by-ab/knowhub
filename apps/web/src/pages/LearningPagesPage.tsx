@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { setPage, tree, useAppData } from "@/lib/store";
 import { renderMarkdown } from "@/lib/markdown";
+import { renderMermaidIn } from "@/lib/mermaid";
 import { generatePageContent } from "@/lib/aiActions";
 import type { TreeNode } from "@/lib/types";
 
@@ -107,6 +108,7 @@ export default function LearningPagesPage() {
   const [draft, setDraft] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   // AI assist
   const [prompt, setPrompt] = useState("");
@@ -183,6 +185,11 @@ export default function LearningPagesPage() {
 
   const selectedTitle = flat.find((f) => f.node.id === selectedId)?.node.title;
   const previewHtml = useMemo(() => renderMarkdown(draft), [draft]);
+
+  // Render any ```mermaid diagrams once the preview HTML is in the DOM.
+  useEffect(() => {
+    if (tab === "preview" && previewRef.current) renderMermaidIn(previewRef.current);
+  }, [previewHtml, tab]);
 
   async function runAi(mode: "generate" | "improve") {
     if (!selectedId || !selectedTitle || aiLoading) return;
@@ -366,6 +373,7 @@ export default function LearningPagesPage() {
               <div className="min-h-[50vh] p-5">
                 {draft.trim() ? (
                   <div
+                    ref={previewRef}
                     className="md-prose max-w-full break-words"
                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                   />
