@@ -194,9 +194,8 @@ export default function LearningPagesPage() {
       stopTTS();
       setSpeaking(false);
     } else {
-      speak(markdownToSpeakable(draft));
+      speak(markdownToSpeakable(draft), { title: selectedTitle ?? "Learning Page" });
       setSpeaking(true);
-      // Poll to detect when speech ends naturally
       const poll = setInterval(() => {
         if (!isSpeaking()) {
           setSpeaking(false);
@@ -380,11 +379,11 @@ export default function LearningPagesPage() {
           </p>
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 lg:grid-cols-[260px_1fr]">
-          {/* Collapsible picker */}
-          <aside className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-2">
+        <div className="mt-6 grid gap-4 lg:grid-cols-[280px_1fr]">
+          {/* Sticky tree picker panel */}
+          <aside className="lg:sticky lg:top-4 lg:self-start flex flex-col min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-2" style={{ maxHeight: "calc(100vh - 6rem)" }}>
             {/* Batch generate toolbar */}
-            <div className="mb-2 space-y-2 px-1">
+            <div className="mb-2 shrink-0 space-y-2 px-1">
               <div className="text-xs text-slate-500">
                 {checked.size > 0
                   ? `${checked.size} topic${checked.size === 1 ? "" : "s"} selected`
@@ -407,8 +406,9 @@ export default function LearningPagesPage() {
                 {batch.running ? `Generating ${batch.done}/${batch.total}…` : `Generate ${checked.size || ""} selected`}
               </button>
             </div>
-            {batch.error && <p className="px-1 pb-1 text-xs text-rose-300">{batch.error}</p>}
-            <ul className="max-h-[60vh] overflow-y-auto overflow-x-auto">
+            {batch.error && <p className="shrink-0 px-1 pb-1 text-xs text-rose-300">{batch.error}</p>}
+            {/* Scrollable tree list — fills remaining height of sticky panel */}
+            <ul className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scroll-smooth">
               {roots.map((n) => (
                 <PickerNode
                   key={n.id}
@@ -553,7 +553,7 @@ export default function LearningPagesPage() {
                     onClick={() => setGenMode(m)}
                     className={`rounded px-2 py-0.5 text-xs font-medium transition ${genMode === m ? "bg-brand-600 text-white" : "text-slate-400 hover:text-white"}`}
                   >
-                    {m === "A" ? "A · Free prompt" : "B · Structured"}
+                    {m === "A" ? "A · Free-style Prompt" : "B · Structured Prompt"}
                   </button>
                 ))}
               </div>

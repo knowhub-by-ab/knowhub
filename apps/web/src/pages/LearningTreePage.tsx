@@ -363,7 +363,7 @@ export default function LearningTreePage() {
               onClick={() => setTreeMode(m)}
               className={`rounded px-2 py-0.5 text-xs font-medium transition ${treeMode === m ? "bg-brand-600 text-white" : "text-slate-400 hover:text-white"}`}
             >
-              {m === "A" ? "A · Free prompt" : "B · Structured"}
+              {m === "A" ? "A · Free-style Prompt" : "B · Structured Prompt"}
             </button>
           ))}
         </div>

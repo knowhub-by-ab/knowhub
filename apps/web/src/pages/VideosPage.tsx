@@ -50,7 +50,12 @@ export default function VideosPage() {
       });
       setTopic("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Suggestion failed.");
+      const msg = err instanceof Error ? err.message : "Suggestion failed.";
+      if (msg === "YOUTUBE_API_KEY_MISSING") {
+        setError("YouTube Data API key not configured. Go to Cloudflare Pages → Settings → Environment variables and add YOUTUBE_API_KEY. See the Guide for instructions.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }

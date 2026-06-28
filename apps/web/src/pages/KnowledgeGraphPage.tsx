@@ -28,7 +28,10 @@ interface Pos {
 
 export default function KnowledgeGraphPage() {
   const data = useAppData();
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Start with all nodes collapsed so graph loads tidy; user expands what they want.
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () => new Set(data.nodes.map((n) => n.id))
+  );
 
   function toggle(id: string) {
     setCollapsed((prev) => {

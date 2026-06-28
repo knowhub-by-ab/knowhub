@@ -370,69 +370,78 @@ export async function generateQuestionBank(
   return questionBanks.add(title, source, questions).id;
 }
 
-/** Suggest YouTube video IDs for a topic or page content, validate them, and save. */
+/** Suggest YouTube videos for a topic or page content.
+ * AI generates search queries → /api/youtube does the real YouTube search.
+ * This avoids hallucinated video IDs. */
 export async function suggestVideos(
   keys: ProviderKey[],
   opts: { topic?: string; pageText?: string; pageId?: string }
 ): Promise<void> {
   const { topic, pageText, pageId } = opts;
-  const subject = topic ?? (pageText ? pageText.slice(0, 800) : "");
+  const subject = topic ?? (pageText ? pageText.slice(0, 600) : "");
   if (!subject) return;
 
+  // Step 1: AI suggests search queries (not video IDs — they hallucinate those)
   const messages: ChatMessage[] = [
     {
       role: "user",
-      content: `Suggest 5 real YouTube videos (each under 20 minutes) that best explain: "${subject.slice(0, 400)}".
-Respond with a JSON array only:
-[{"videoId":"<11-char-id>","title":"<video title>","channel":"<channel name>","estimatedMinutes":<number>}]
-Only use real video IDs you are confident exist. No commentary.`,
+      content: `I want to find 3 excellent YouTube tutorial videos (each under 20 minutes) about: "${subject.slice(0, 400)}".
+Generate 3 specific YouTube search queries that would find the best videos for a learner.
+Respond with a JSON array of strings only, e.g. ["query one", "query two", "query three"]. No commentary.`,
     },
   ];
 
-  const raw = await chatJSON<{ videoId: string; title: string; channel: string; estimatedMinutes?: number }[]>(
-    keys,
-    messages,
-    "other"
-  );
-  const suggestions = Array.isArray(raw) ? raw : [];
-  if (!suggestions.length) return;
-
-  // Validate via /api/youtube
-  const videoIds = suggestions.map((s) => s.videoId).filter(Boolean);
-  let validatedMap: Record<string, { title: string; channel: string; durationSec: number; validated: boolean }> = {};
-
-  try {
-    const res = await fetch("/api/youtube", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ videoIds }),
-    });
-    if (res.ok) {
-      const data = (await res.json()) as {
-        results: { videoId: string; title: string; channel: string; durationSec: number; validated: boolean }[];
-      };
-      for (const r of data.results) validatedMap[r.videoId] = r;
-    }
-  } catch {
-    // network issue — fall through with AI-claimed data
+  const raw = await chatJSON<string[]>(keys, messages, "other");
+  const queries = Array.isArray(raw) ? raw.filter((q) => typeof q === "string").slice(0, 3) : [];
+  if (!queries.length) {
+    // fallback: use subject directly as a query
+    queries.push(subject.slice(0, 100) + " tutorial");
   }
 
-  const recs = suggestions.map((s) => {
-    const v = validatedMap[s.videoId];
-    const durationSec = v?.durationSec ?? (s.estimatedMinutes ?? 0) * 60;
-    // Skip if validated and over 20 minutes
-    if (v?.validated && durationSec > 1200) return null;
-    return {
-      videoId: s.videoId,
-      title: v?.title ?? s.title,
-      channel: v?.channel ?? s.channel,
-      durationSec,
-      validated: v?.validated ?? false,
-      pageId,
-      topic: topic,
-      kept: false,
-    };
-  }).filter((r): r is NonNullable<typeof r> => r !== null);
+  // Step 2: For each query, search YouTube via /api/youtube (server-side)
+  const allResults: {
+    videoId: string; title: string; channel: string; durationSec: number; validated: boolean; thumbnail?: string;
+  }[] = [];
+  const seen = new Set<string>();
 
-  videos.addBatch(recs);
+  await Promise.all(
+    queries.map(async (query) => {
+      try {
+        const res = await fetch("/api/youtube", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, maxResults: 3 }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          results?: { videoId: string; title: string; channel: string; durationSec: number; validated: boolean; thumbnail?: string }[];
+          noApiKey?: boolean;
+        };
+        if (data.noApiKey) throw new Error("YOUTUBE_API_KEY_MISSING");
+        for (const r of data.results ?? []) {
+          if (!seen.has(r.videoId)) {
+            seen.add(r.videoId);
+            allResults.push(r);
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message === "YOUTUBE_API_KEY_MISSING") throw err;
+      }
+    })
+  );
+
+  if (!allResults.length) return;
+
+  videos.addBatch(
+    allResults.slice(0, 6).map((r) => ({
+      videoId: r.videoId,
+      title: r.title,
+      channel: r.channel,
+      durationSec: r.durationSec,
+      validated: r.validated,
+      pageId,
+      topic,
+      kept: false,
+    }))
+  );
 }

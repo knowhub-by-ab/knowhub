@@ -1,4 +1,5 @@
-import { Suspense, useState } from "react";
+import { Suspense, lazy, useState } from "react";
+const TTSPlayer = lazy(() => import("@/components/TTSPlayer"));
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { LogOut, Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
@@ -133,6 +134,10 @@ export default function AppLayout() {
           </footer>
         </main>
       </div>
+      {/* Global TTS player — floats above all content when TTS is active */}
+      <Suspense fallback={null}>
+        <TTSPlayer />
+      </Suspense>
     </div>
   );
 }
