@@ -7,9 +7,18 @@ import type {
   ResourceType,
   Quiz,
   Question,
+  Attempt,
+  AttemptItem,
   ProviderKey,
   ProviderId,
+  AiRole,
   Note,
+  ChatSession,
+  ChatMessage,
+  QuestionBank,
+  Flashcard,
+  Highlight,
+  VideoRec,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -29,6 +38,11 @@ const DEFAULT_DATA: AppData = {
   quizzes: [],
   aiKeys: [],
   github: {},
+  chatSessions: [],
+  questionBanks: [],
+  flashcards: [],
+  highlights: [],
+  videos: [],
 };
 
 function load(): AppData {
@@ -70,6 +84,11 @@ function load(): AppData {
       quizzes: parsed.quizzes ?? [],
       aiKeys,
       github: parsed.github ?? {},
+      chatSessions: parsed.chatSessions ?? [],
+      questionBanks: parsed.questionBanks ?? [],
+      flashcards: parsed.flashcards ?? [],
+      highlights: parsed.highlights ?? [],
+      videos: parsed.videos ?? [],
     };
   } catch {
     return structuredClone(DEFAULT_DATA);
@@ -138,6 +157,20 @@ export function getState(): AppData {
   return state;
 }
 
+/**
+ * Light snapshot for Firestore: only small metadata that must survive cross-
+ * device without going through GitHub. Heavy content (pages, notesList,
+ * resources, quizzes) stays in GitHub only.
+ */
+export function lightSnapshot() {
+  return {
+    version: state.version,
+    nodes: state.nodes,
+    aiKeys: state.aiKeys,
+    github: state.github,
+  };
+}
+
 /** Subscribe to any state change (returns an unsubscribe fn). */
 export const subscribeStore = subscribe;
 
@@ -152,6 +185,11 @@ function merged(next: Partial<AppData>): AppData {
     quizzes: next.quizzes ?? [],
     aiKeys: next.aiKeys ?? [],
     github: next.github ?? {},
+    chatSessions: next.chatSessions ?? [],
+    questionBanks: next.questionBanks ?? [],
+    flashcards: next.flashcards ?? [],
+    highlights: next.highlights ?? [],
+    videos: next.videos ?? [],
   };
 }
 
@@ -169,6 +207,27 @@ export function replaceAll(next: Partial<AppData>) {
  */
 export function applyRemoteState(next: Partial<AppData>, remoteUpdatedAt: number) {
   state = merged(next);
+  localUpdatedAt = remoteUpdatedAt;
+  persist();
+  persistStamp();
+  emit();
+}
+
+/**
+ * Apply only the LIGHT fields (nodes, aiKeys, github) from a Firestore remote
+ * snapshot. Heavy content (pages, notesList, resources, quizzes) from local
+ * state is preserved unchanged. This keeps Firestore light.
+ */
+export function applyLightRemoteState(
+  light: { nodes?: AppData["nodes"]; aiKeys?: AppData["aiKeys"]; github?: AppData["github"] },
+  remoteUpdatedAt: number
+) {
+  state = {
+    ...state,
+    nodes: light.nodes ?? state.nodes,
+    aiKeys: light.aiKeys ?? state.aiKeys,
+    github: light.github ?? state.github,
+  };
   localUpdatedAt = remoteUpdatedAt;
   persist();
   persistStamp();
@@ -377,23 +436,128 @@ export const quizzes = {
       quizzes: prev.quizzes.filter((q) => q.id !== id),
     }));
   },
-  recordAttempt(id: string, score: number, total: number) {
+  recordAttempt(id: string, score: number, total: number, items: AttemptItem[]) {
+    const attempt: Attempt = { id: uid(), takenAt: Date.now(), score, total, items };
     setState((prev) => ({
       ...prev,
       quizzes: prev.quizzes.map((q) =>
-        q.id === id
-          ? { ...q, attempts: [...q.attempts, { at: Date.now(), score, total }] }
-          : q
+        q.id === id ? { ...q, attempts: [...q.attempts, attempt] } : q
       ),
     }));
   },
   newQuestionId: () => uid(),
 };
 
+// --- Chat sessions ----------------------------------------------------------
+
+export const chatSessions = {
+  create(firstMessage?: string): ChatSession {
+    const now = Date.now();
+    const s: ChatSession = {
+      id: uid(),
+      title: firstMessage ? firstMessage.slice(0, 40) : "New chat",
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    setState((prev) => ({ ...prev, chatSessions: [s, ...prev.chatSessions] }));
+    return s;
+  },
+  rename(id: string, title: string) {
+    setState((prev) => ({
+      ...prev,
+      chatSessions: prev.chatSessions.map((s) =>
+        s.id === id ? { ...s, title: title.trim() || "Untitled", updatedAt: Date.now() } : s
+      ),
+    }));
+  },
+  setMessages(id: string, messages: ChatMessage[]) {
+    setState((prev) => ({
+      ...prev,
+      chatSessions: prev.chatSessions.map((s) =>
+        s.id === id ? { ...s, messages, updatedAt: Date.now() } : s
+      ),
+    }));
+  },
+  remove(id: string) {
+    setState((prev) => ({
+      ...prev,
+      chatSessions: prev.chatSessions.filter((s) => s.id !== id),
+    }));
+  },
+};
+
+// --- Question banks ---------------------------------------------------------
+
+export const questionBanks = {
+  add(title: string, source: string, questions: Question[]): QuestionBank {
+    const b: QuestionBank = { id: uid(), title, source, questions, createdAt: Date.now() };
+    setState((prev) => ({ ...prev, questionBanks: [b, ...prev.questionBanks] }));
+    return b;
+  },
+  remove(id: string) {
+    setState((prev) => ({ ...prev, questionBanks: prev.questionBanks.filter((b) => b.id !== id) }));
+  },
+};
+
+// --- Flashcards -------------------------------------------------------------
+
+export const flashcards = {
+  addDeck(cards: Omit<Flashcard, "id" | "createdAt">[]): Flashcard[] {
+    const now = Date.now();
+    const deck: Flashcard[] = cards.map((c) => ({ ...c, id: uid(), createdAt: now }));
+    setState((prev) => ({ ...prev, flashcards: [...deck, ...prev.flashcards] }));
+    return deck;
+  },
+  remove(id: string) {
+    setState((prev) => ({ ...prev, flashcards: prev.flashcards.filter((f) => f.id !== id) }));
+  },
+};
+
+// --- Videos -----------------------------------------------------------------
+
+export const videos = {
+  addBatch(recs: Omit<VideoRec, "id" | "createdAt">[]) {
+    const now = Date.now();
+    const newRecs: VideoRec[] = recs.map((r) => ({ ...r, id: uid(), createdAt: now }));
+    setState((prev) => ({ ...prev, videos: [...newRecs, ...prev.videos] }));
+    return newRecs;
+  },
+  keep(id: string) {
+    setState((prev) => ({
+      ...prev,
+      videos: prev.videos.map((v) => (v.id === id ? { ...v, kept: true } : v)),
+    }));
+  },
+  discard(id: string) {
+    setState((prev) => ({ ...prev, videos: prev.videos.filter((v) => v.id !== id) }));
+  },
+  clearUnsaved(pageId?: string) {
+    setState((prev) => ({
+      ...prev,
+      videos: prev.videos.filter((v) => v.kept || (pageId !== undefined && v.pageId !== pageId)),
+    }));
+  },
+};
+
+// --- Highlights -------------------------------------------------------------
+
+export const highlights = {
+  add(h: Highlight) {
+    setState((prev) => ({ ...prev, highlights: [h, ...prev.highlights] }));
+  },
+  remove(id: string) {
+    setState((prev) => ({ ...prev, highlights: prev.highlights.filter((h) => h.id !== id) }));
+  },
+  clearPage(pageId: string) {
+    setState((prev) => ({ ...prev, highlights: prev.highlights.filter((h) => h.pageId !== pageId) }));
+  },
+};
+
 // --- AI provider keys (ordered = fallback priority) -------------------------
 
 export const aiKeys = {
-  add(input: { provider: ProviderId; apiKey: string; baseUrl?: string; model?: string; label?: string }): ProviderKey {
+  add(input: { provider: ProviderId; apiKey: string; baseUrl?: string; model?: string; label?: string; roles?: AiRole[] }): ProviderKey {
     const k: ProviderKey = {
       id: uid(),
       provider: input.provider,
@@ -401,12 +565,21 @@ export const aiKeys = {
       baseUrl: input.baseUrl?.trim() || undefined,
       model: input.model?.trim() || undefined,
       label: input.label?.trim() || undefined,
+      roles: input.roles?.length ? input.roles : undefined,
     };
     setState((prev) => ({ ...prev, aiKeys: [...prev.aiKeys, k] }));
     return k;
   },
   remove(id: string) {
     setState((prev) => ({ ...prev, aiKeys: prev.aiKeys.filter((k) => k.id !== id) }));
+  },
+  updateRoles(id: string, roles: AiRole[]) {
+    setState((prev) => ({
+      ...prev,
+      aiKeys: prev.aiKeys.map((k) =>
+        k.id === id ? { ...k, roles: roles.length ? roles : undefined } : k
+      ),
+    }));
   },
   move(id: string, dir: -1 | 1) {
     setState((prev) => {

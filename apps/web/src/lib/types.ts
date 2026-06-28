@@ -26,7 +26,11 @@ export type ProviderId =
   | "groq"
   | "openrouter"
   | "openai"
+  | "puter"
   | "custom";
+
+/** Role tag for routing AI requests to the right key. */
+export type AiRole = "tree" | "pages" | "assessments" | "other" | "any";
 
 /**
  * One configured AI provider key. The list order in AppData.aiKeys is the
@@ -44,6 +48,11 @@ export interface ProviderKey {
   model?: string;
   /** Optional friendly label. */
   label?: string;
+  /**
+   * Role tags for routing: requests prefer keys that include the matching role
+   * (or "any"). Omitting roles is equivalent to ["any"].
+   */
+  roles?: AiRole[];
 }
 
 export type ResourceType = "doc" | "article" | "video" | "course" | "book" | "other";
@@ -62,12 +71,27 @@ export interface Question {
   options: string[];
   /** Indices of correct option(s). More than one ⇒ multiple-choice. */
   correct: number[];
+  /** One-line explanation shown after submission. */
+  explanation?: string;
+}
+
+export interface AttemptItem {
+  questionId: string;
+  prompt: string;
+  options: string[];
+  correct: number[];
+  chosen: number[];
+  isCorrect: boolean;
+  explanation?: string;
 }
 
 export interface Attempt {
-  at: number;
+  id: string;
+  takenAt: number;
   score: number;
   total: number;
+  /** Full snapshot of the attempt (questions + answers). */
+  items: AttemptItem[];
 }
 
 export interface Quiz {
@@ -82,6 +106,42 @@ export interface Note {
   id: string;
   title: string;
   body: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface QuestionBank {
+  id: string;
+  title: string;
+  source: string;
+  questions: Question[];
+  createdAt: number;
+}
+
+export interface Flashcard {
+  id: string;
+  front: string;
+  back: string;
+  pageId?: string;
+  createdAt: number;
+}
+
+export type HighlightColor = "yellow" | "green" | "blue" | "pink";
+
+export interface Highlight {
+  id: string;
+  pageId: string;
+  text: string;
+  prefix: string;
+  suffix: string;
+  color: HighlightColor;
+  createdAt: number;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
 }
@@ -112,6 +172,34 @@ export interface AppData {
   aiKeys: ProviderKey[];
   /** GitHub connection (spec 09). */
   github?: GithubState;
+  /** AI Tutor chat sessions (heavy → GitHub). */
+  chatSessions: ChatSession[];
+  /** Question banks generated from pages, docs, or text. */
+  questionBanks: QuestionBank[];
+  /** Flashcard decks. */
+  flashcards: Flashcard[];
+  /** Text highlights on learning pages. */
+  highlights: Highlight[];
+  /** YouTube video recommendations. */
+  videos: VideoRec[];
+}
+
+export interface VideoRec {
+  id: string;
+  videoId: string;
+  title: string;
+  channel: string;
+  /** Duration in seconds (0 = unknown). */
+  durationSec: number;
+  /** Learning page node id this was suggested for, if any. */
+  pageId?: string;
+  /** Free-text topic if not tied to a page. */
+  topic?: string;
+  /** Validated via YouTube Data API (true) or oEmbed/AI-claimed (false). */
+  validated: boolean;
+  /** User kept this rec (vs. discarded). */
+  kept: boolean;
+  createdAt: number;
 }
 
 export const STATUS_LABELS: Record<NodeStatus, string> = {

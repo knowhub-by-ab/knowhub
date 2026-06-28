@@ -1,5 +1,6 @@
 import { chatJSON, chatCompletion } from "./ai";
-import { tree, quizzes } from "./store";
+import { tree, quizzes, questionBanks, flashcards, videos } from "./store";
+import { fixMermaidBlocks } from "./mermaidFix";
 import type { AppData, ChatMessage, ProviderKey, Question } from "./types";
 
 /**
@@ -75,8 +76,9 @@ export async function generatePageContent(
         `\nInstruction: ${instruction.trim() || "Write a complete, accurate learning page for this topic."}`,
     },
   ];
-  const { content } = await chatCompletion(keys, messages);
-  return stripFences(content);
+  const { content } = await chatCompletion(keys, messages, "pages");
+  const md = stripFences(content);
+  return fixMermaidBlocks(md, keys);
 }
 
 interface GenNode {
@@ -104,7 +106,7 @@ export async function generateLearningTree(
         `{"title", "children"?} ]}. Keep titles short. Max depth 3.`,
     },
   ];
-  const data = await chatJSON<GenNode[] | { topics?: GenNode[] }>(keys, messages);
+  const data = await chatJSON<GenNode[] | { topics?: GenNode[] }>(keys, messages, "tree");
   const topics = Array.isArray(data) ? data : data.topics ?? [];
   if (!topics.length) throw new Error("The AI returned no topics. Try again.");
 
@@ -174,7 +176,7 @@ export async function generateTreeChanges(
     },
   ];
 
-  const data = await chatJSON<{ additions?: Addition[] }>(keys, messages);
+  const data = await chatJSON<{ additions?: Addition[] }>(keys, messages, "tree");
   const additions = data.additions ?? [];
   if (!additions.length) throw new Error("The AI didn't propose any changes. Try rephrasing.");
 
@@ -197,6 +199,21 @@ interface GenQuestion {
   prompt: string;
   options: string[];
   correct: number[];
+  explanation?: string;
+}
+
+function parseGenQuestions(raw: GenQuestion[]): Question[] {
+  return raw
+    .filter((q) => q && q.prompt && Array.isArray(q.options) && q.options.length >= 2)
+    .map((q) => ({
+      id: quizzes.newQuestionId(),
+      prompt: String(q.prompt),
+      options: q.options.map((o) => String(o)),
+      correct: (Array.isArray(q.correct) ? q.correct : [])
+        .filter((i) => Number.isInteger(i) && i >= 0 && i < q.options.length),
+      explanation: q.explanation ? String(q.explanation) : undefined,
+    }))
+    .filter((q) => q.correct.length >= 1);
 }
 
 /** Ask the AI for an MCQ quiz on `topic` and store it. Returns the quiz id. */
@@ -212,22 +229,210 @@ export async function generateQuiz(
       content:
         `Create a ${n}-question multiple-choice quiz about "${topic}". Return JSON: ` +
         `{"title": string, "questions": [{"prompt": string, "options": [4 strings], ` +
-        `"correct": [0-based index/indices of correct option(s)]}]}. Usually one correct ` +
-        `option per question; occasionally two. Options must be plausible.`,
+        `"correct": [0-based index/indices of correct option(s)], "explanation": "one-line explanation of the correct answer"}]}. ` +
+        `Usually one correct option per question; occasionally two. Options must be plausible.`,
     },
   ];
-  const data = await chatJSON<{ title?: string; questions?: GenQuestion[] }>(keys, messages);
-  const questions: Question[] = (data.questions ?? [])
-    .filter((q) => q && q.prompt && Array.isArray(q.options) && q.options.length >= 2)
-    .map((q) => ({
-      id: quizzes.newQuestionId(),
-      prompt: String(q.prompt),
-      options: q.options.map((o) => String(o)),
-      correct: (Array.isArray(q.correct) ? q.correct : [])
-        .filter((i) => Number.isInteger(i) && i >= 0 && i < q.options.length),
-    }))
-    .filter((q) => q.correct.length >= 1);
-
+  const data = await chatJSON<{ title?: string; questions?: GenQuestion[] }>(keys, messages, "assessments");
+  const questions = parseGenQuestions(data.questions ?? []);
   if (!questions.length) throw new Error("The AI returned no usable questions. Try again.");
   return quizzes.add(data.title?.trim() || `${topic} quiz`, questions).id;
+}
+
+/** Generate a quiz from page content (page-based assessment). */
+export async function generateQuizFromPages(
+  keys: ProviderKey[],
+  pageTitles: string[],
+  pageContents: string[],
+  n = 5
+): Promise<string> {
+  const context = pageTitles
+    .map((t, i) => `### ${t}\n${pageContents[i]?.slice(0, 1500) ?? ""}`)
+    .join("\n\n");
+  const messages: ChatMessage[] = [
+    { role: "system", content: "You output ONLY valid JSON. No prose, no code fences." },
+    {
+      role: "user",
+      content:
+        `Based on the following learning page content, create a ${n}-question MCQ quiz. ` +
+        `Return JSON: {"title": string, "questions": [{"prompt": string, "options": [4 strings], ` +
+        `"correct": [0-based index/indices], "explanation": "one-line explanation"}]}.\n\n${context}`,
+    },
+  ];
+  const data = await chatJSON<{ title?: string; questions?: GenQuestion[] }>(keys, messages, "assessments");
+  const questions = parseGenQuestions(data.questions ?? []);
+  if (!questions.length) throw new Error("The AI returned no usable questions. Try again.");
+  const title = data.title?.trim() || `Quiz: ${pageTitles.slice(0, 2).join(", ")}`;
+  return quizzes.add(title, questions).id;
+}
+
+/** Improve tree: propose missing/trending topics to add. Returns count of nodes created. */
+export async function improveTree(
+  keys: ProviderKey[],
+  nodes: AppData["nodes"],
+  topic: string
+): Promise<number> {
+  const outline = nodes.length
+    ? tree
+        .flatten(nodes)
+        .map(({ node, depth }) => `${"  ".repeat(depth)}- [${node.id}] ${node.title}`)
+        .join("\n")
+    : "(empty tree)";
+
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You edit a learner's topic tree. Output ONLY JSON of this shape: " +
+        '{"additions":[{"parentId": string|null, "title": string, "children"?: [{"title": string}]}]}. ' +
+        "Add ONLY topics that are currently missing but important for learning this subject. " +
+        "Do NOT recreate existing topics. parentId must be an existing [id] or null.",
+    },
+    {
+      role: "user",
+      content: `Subject: "${topic}"\n\nExisting tree:\n${outline}\n\nPropose missing important topics to add.`,
+    },
+  ];
+
+  interface Addition {
+    parentId?: string | null;
+    title: string;
+    children?: { title: string }[];
+  }
+  const data = await chatJSON<{ additions?: Addition[] }>(keys, messages, "tree");
+  const additions = data.additions ?? [];
+  if (!additions.length) throw new Error("No improvements suggested.");
+
+  const valid = new Set(nodes.map((n) => n.id));
+  let count = 0;
+  for (const a of additions) {
+    if (!a?.title) continue;
+    const pid = a.parentId && valid.has(a.parentId) ? a.parentId : null;
+    const id = tree.add(String(a.title).slice(0, 120), pid).id;
+    count++;
+    for (const c of a.children ?? []) {
+      if (c?.title) { tree.add(String(c.title).slice(0, 120), id); count++; }
+    }
+  }
+  return count;
+}
+
+/** Generate flashcards from source text. Returns added flashcards. */
+export async function generateFlashcardsFromText(
+  keys: ProviderKey[],
+  sourceText: string,
+  pageId?: string,
+  n = 10
+): Promise<number> {
+  const messages: ChatMessage[] = [
+    { role: "system", content: "You output ONLY valid JSON. No prose, no code fences." },
+    {
+      role: "user",
+      content:
+        `Create ${n} flashcards from the following content. Each card: front = a question or term, ` +
+        `back = the answer or definition. Return JSON: {"cards": [{"front": string, "back": string}]}.\n\n` +
+        sourceText.slice(0, 4000),
+    },
+  ];
+  const data = await chatJSON<{ cards?: { front: string; back: string }[] }>(keys, messages, "other");
+  const cards = (data.cards ?? []).filter((c) => c?.front && c?.back);
+  if (!cards.length) throw new Error("No flashcards generated.");
+  flashcards.addDeck(cards.map((c) => ({ front: c.front, back: c.back, pageId })));
+  return cards.length;
+}
+
+/** Generate a question bank from source text. Returns question bank id. */
+export async function generateQuestionBank(
+  keys: ProviderKey[],
+  title: string,
+  source: string,
+  sourceText: string,
+  n = 20,
+  types = ["mcq"]
+): Promise<string> {
+  const typeInstructions = types.includes("subjective")
+    ? 'Mix MCQ (with "options" and "correct" arrays) and subjective (with "type":"subjective", no options/correct) questions.'
+    : 'All questions are MCQ with "options" (4 strings) and "correct" (0-based index array).';
+
+  const messages: ChatMessage[] = [
+    { role: "system", content: "You output ONLY valid JSON. No prose, no code fences." },
+    {
+      role: "user",
+      content:
+        `Generate ${n} exam questions from the following content. ${typeInstructions} ` +
+        `Return JSON: {"questions": [{"prompt": string, "options"?: [string], "correct"?: [number], "explanation"?: string}]}.\n\n` +
+        sourceText.slice(0, 6000),
+    },
+  ];
+  const data = await chatJSON<{ questions?: GenQuestion[] }>(keys, messages, "assessments");
+  const questions = parseGenQuestions(data.questions ?? []);
+  if (!questions.length) throw new Error("No questions generated.");
+  return questionBanks.add(title, source, questions).id;
+}
+
+/** Suggest YouTube video IDs for a topic or page content, validate them, and save. */
+export async function suggestVideos(
+  keys: ProviderKey[],
+  opts: { topic?: string; pageText?: string; pageId?: string }
+): Promise<void> {
+  const { topic, pageText, pageId } = opts;
+  const subject = topic ?? (pageText ? pageText.slice(0, 800) : "");
+  if (!subject) return;
+
+  const messages: ChatMessage[] = [
+    {
+      role: "user",
+      content: `Suggest 5 real YouTube videos (each under 20 minutes) that best explain: "${subject.slice(0, 400)}".
+Respond with a JSON array only:
+[{"videoId":"<11-char-id>","title":"<video title>","channel":"<channel name>","estimatedMinutes":<number>}]
+Only use real video IDs you are confident exist. No commentary.`,
+    },
+  ];
+
+  const raw = await chatJSON<{ videoId: string; title: string; channel: string; estimatedMinutes?: number }[]>(
+    keys,
+    messages,
+    "other"
+  );
+  const suggestions = Array.isArray(raw) ? raw : [];
+  if (!suggestions.length) return;
+
+  // Validate via /api/youtube
+  const videoIds = suggestions.map((s) => s.videoId).filter(Boolean);
+  let validatedMap: Record<string, { title: string; channel: string; durationSec: number; validated: boolean }> = {};
+
+  try {
+    const res = await fetch("/api/youtube", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoIds }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        results: { videoId: string; title: string; channel: string; durationSec: number; validated: boolean }[];
+      };
+      for (const r of data.results) validatedMap[r.videoId] = r;
+    }
+  } catch {
+    // network issue — fall through with AI-claimed data
+  }
+
+  const recs = suggestions.map((s) => {
+    const v = validatedMap[s.videoId];
+    const durationSec = v?.durationSec ?? (s.estimatedMinutes ?? 0) * 60;
+    // Skip if validated and over 20 minutes
+    if (v?.validated && durationSec > 1200) return null;
+    return {
+      videoId: s.videoId,
+      title: v?.title ?? s.title,
+      channel: v?.channel ?? s.channel,
+      durationSec,
+      validated: v?.validated ?? false,
+      pageId,
+      topic: topic,
+      kept: false,
+    };
+  }).filter((r): r is NonNullable<typeof r> => r !== null);
+
+  videos.addBatch(recs);
 }

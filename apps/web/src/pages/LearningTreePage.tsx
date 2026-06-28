@@ -17,7 +17,7 @@ import {
   IndentDecrease,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
-import { generateLearningTree, generateTreeChanges } from "@/lib/aiActions";
+import { generateLearningTree, generateTreeChanges, improveTree } from "@/lib/aiActions";
 import {
   STATUS_LABELS,
   STATUS_CYCLE,
@@ -282,6 +282,10 @@ export default function LearningTreePage() {
   const [genParent, setGenParent] = useState<string>("");
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [treeMode, setTreeMode] = useState<"A" | "B">("A");
+  const [treeModeB, setTreeModeB] = useState({ startLevel: "Beginner", topLevel: "Expert", style: "Normal explanation" });
+  const LEVELS = ["Absolute Novice", "Beginner", "Intermediate", "Expert", "Advanced", "Professional", "Industry Standards"];
+  const STYLES = ["Normal explanation", "Simple & concise", "Story-driven", "Academic / formal", "Practical & example-heavy"];
   const flat = tree.flatten(data.nodes);
 
   function addRoot() {
@@ -292,8 +296,11 @@ export default function LearningTreePage() {
   }
 
   async function generate() {
-    const topic = genTopic.trim();
-    if (!topic || genLoading) return;
+    const rawTopic = genTopic.trim();
+    if (!rawTopic || genLoading) return;
+    const topic = treeMode === "B"
+      ? `${rawTopic} (from ${treeModeB.startLevel} to ${treeModeB.topLevel} level, style: ${treeModeB.style})`
+      : rawTopic;
     setGenError(null);
     setGenLoading(true);
     try {
@@ -346,7 +353,45 @@ export default function LearningTreePage() {
       </div>
 
       {/* Generate with AI */}
-      <div className="mt-3 rounded-xl border border-brand-500/30 bg-brand-500/5 p-3">
+      <div className="mt-3 rounded-xl border border-brand-500/30 bg-brand-500/5 p-3 space-y-2">
+        {/* Mode toggle */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Mode:</span>
+          {(["A", "B"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setTreeMode(m)}
+              className={`rounded px-2 py-0.5 text-xs font-medium transition ${treeMode === m ? "bg-brand-600 text-white" : "text-slate-400 hover:text-white"}`}
+            >
+              {m === "A" ? "A · Free prompt" : "B · Structured"}
+            </button>
+          ))}
+        </div>
+        {treeMode === "B" && (
+          <div className="flex flex-wrap gap-2">
+            <label className="flex items-center gap-1 text-xs text-slate-400">
+              From:
+              <select value={treeModeB.startLevel} onChange={(e) => setTreeModeB((v) => ({ ...v, startLevel: e.target.value }))}
+                className="rounded border border-white/15 bg-slate-900/60 px-1.5 py-0.5 text-xs text-white outline-none focus:border-brand-500">
+                {LEVELS.map((l) => <option key={l}>{l}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-1 text-xs text-slate-400">
+              To:
+              <select value={treeModeB.topLevel} onChange={(e) => setTreeModeB((v) => ({ ...v, topLevel: e.target.value }))}
+                className="rounded border border-white/15 bg-slate-900/60 px-1.5 py-0.5 text-xs text-white outline-none focus:border-brand-500">
+                {LEVELS.map((l) => <option key={l}>{l}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-1 text-xs text-slate-400">
+              Style:
+              <select value={treeModeB.style} onChange={(e) => setTreeModeB((v) => ({ ...v, style: e.target.value }))}
+                className="rounded border border-white/15 bg-slate-900/60 px-1.5 py-0.5 text-xs text-white outline-none focus:border-brand-500">
+                {STYLES.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
         {flat.length > 0 && (
           <label className="mb-2 block text-xs text-slate-400">
             Placement
@@ -393,6 +438,29 @@ export default function LearningTreePage() {
             {genLoading ? "Generating…" : "Generate"}
           </button>
         </div>
+        {/* Improve tree */}
+        {flat.length > 0 && (
+          <button
+            onClick={async () => {
+              if (genLoading) return;
+              setGenError(null);
+              setGenLoading(true);
+              try {
+                const rootTitles = tree.childrenOf(data.nodes, null).map((n) => n.title).join(", ");
+                await improveTree(data.aiKeys, data.nodes, rootTitles || "my learning tree");
+              } catch (err) {
+                setGenError(err instanceof Error ? err.message : "Improve failed.");
+              } finally {
+                setGenLoading(false);
+              }
+            }}
+            disabled={genLoading}
+            className="mt-2 text-xs text-brand-300 hover:underline disabled:opacity-50"
+          >
+            {genLoading ? "Working…" : "✨ Improve tree — suggest missing topics"}
+          </button>
+        )}
+
         {genError && (
           <p className="mt-2 text-xs text-rose-300">
             {genError}{" "}

@@ -10,12 +10,23 @@ import {
   ChevronDown,
   Sparkles,
   Loader2,
+  Copy,
+  Volume2,
+  VolumeX,
+  Download,
+  Highlighter,
+  X,
+  ExternalLink,
 } from "lucide-react";
-import { setPage, tree, useAppData } from "@/lib/store";
+import { setPage, tree, highlights as highlightStore, useAppData } from "@/lib/store";
+import { selectionToHighlight, applyHighlights, HIGHLIGHT_CLASSES, type HighlightColor } from "@/lib/highlights";
 import { renderMarkdown } from "@/lib/markdown";
 import { renderMermaidIn } from "@/lib/mermaid";
 import { generatePageContent } from "@/lib/aiActions";
 import { STATUS_LABELS, STATUS_CYCLE, type NodeStatus, type TreeNode } from "@/lib/types";
+import { speak, stopTTS, isSpeaking, isTTSSupported, markdownToSpeakable } from "@/lib/tts";
+import { exportMarkdown, exportDoc, exportPdf } from "@/lib/exporters";
+import { discussPage } from "@/lib/external";
 
 type Tab = "edit" | "preview";
 
@@ -75,6 +86,7 @@ function PickerNode({
         />
         <button
           onClick={() => onSelect(node.id)}
+          title={node.title}
           className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left text-sm text-slate-200"
         >
           <span
@@ -162,14 +174,70 @@ export default function LearningPagesPage() {
       setTab("preview");
     }
   }
-  const [tab, setTab] = useState<Tab>("edit");
+  const [tab, setTab] = useState<Tab>("preview");
   const [draft, setDraft] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [showDownload, setShowDownload] = useState(false);
+  const [showDiscuss, setShowDiscuss] = useState(false);
+
+  async function copyPage() {
+    if (!draft.trim()) return;
+    await navigator.clipboard.writeText(draft);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function toggleTTS() {
+    if (speaking || isSpeaking()) {
+      stopTTS();
+      setSpeaking(false);
+    } else {
+      speak(markdownToSpeakable(draft));
+      setSpeaking(true);
+      // Poll to detect when speech ends naturally
+      const poll = setInterval(() => {
+        if (!isSpeaking()) {
+          setSpeaking(false);
+          clearInterval(poll);
+        }
+      }, 500);
+    }
+  }
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
+  // Highlight toolbar
+  const [hlToolbar, setHlToolbar] = useState<{ x: number; y: number } | null>(null);
+  const [hlColor, setHlColor] = useState<HighlightColor>("yellow");
+
+  function onPreviewMouseUp(e: React.MouseEvent) {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+      setHlToolbar(null);
+      return;
+    }
+    const rect = (e.target as HTMLElement).closest(".md-prose")?.getBoundingClientRect();
+    if (!rect) return;
+    setHlToolbar({ x: e.clientX, y: e.clientY });
+  }
+
+  function applyHighlight(color: HighlightColor) {
+    const sel = window.getSelection();
+    if (!sel || !previewRef.current || !selectedId) return;
+    const h = selectionToHighlight(sel, previewRef.current, selectedId, color);
+    if (h) highlightStore.add(h);
+    sel.removeAllRanges();
+    setHlToolbar(null);
+  }
+
   // AI assist
+  const [genMode, setGenMode] = useState<"A" | "B">("A");
   const [prompt, setPrompt] = useState("");
+  const [modeB, setModeB] = useState({ startLevel: "Beginner", topLevel: "Expert", style: "Normal explanation" });
+  const LEVELS = ["Absolute Novice", "Beginner", "Intermediate", "Expert", "Advanced", "Professional", "Industry Standards"];
+  const STYLES = ["Normal explanation", "Simple & concise", "Story-driven", "Academic / formal", "Practical & example-heavy"];
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -243,7 +311,14 @@ export default function LearningPagesPage() {
 
   const selectedTitle = flat.find((f) => f.node.id === selectedId)?.node.title;
   const selectedNode = data.nodes.find((n) => n.id === selectedId) ?? null;
-  const previewHtml = useMemo(() => renderMarkdown(draft), [draft]);
+  const pageHighlights = useMemo(
+    () => data.highlights.filter((h) => h.pageId === selectedId),
+    [data.highlights, selectedId]
+  );
+  const previewHtml = useMemo(() => {
+    const base = renderMarkdown(draft);
+    return selectedId ? applyHighlights(base, pageHighlights, selectedId) : base;
+  }, [draft, pageHighlights, selectedId]);
 
   // Render any ```mermaid diagrams once the preview HTML is in the DOM.
   useEffect(() => {
@@ -255,10 +330,14 @@ export default function LearningPagesPage() {
     setAiError(null);
     setAiLoading(true);
     try {
-      const instruction =
-        mode === "improve"
-          ? prompt.trim() || "Improve, expand and correct this page; keep it well structured."
-          : prompt.trim() || `Write a complete learning page for "${selectedTitle}".`;
+      let instruction: string;
+      if (mode === "improve") {
+        instruction = prompt.trim() || "Improve, expand and correct this page; keep it well structured.";
+      } else if (genMode === "B") {
+        instruction = `Write a complete learning page for "${selectedTitle}". Target audience: someone starting at ${modeB.startLevel} level, aiming to reach ${modeB.topLevel} level. Writing style: ${modeB.style}.${prompt.trim() ? ` Additional instructions: ${prompt.trim()}` : ""}`;
+      } else {
+        instruction = prompt.trim() || `Write a complete learning page for "${selectedTitle}".`;
+      }
       const result = await generatePageContent(
         data.aiKeys,
         selectedTitle,
@@ -329,7 +408,7 @@ export default function LearningPagesPage() {
               </button>
             </div>
             {batch.error && <p className="px-1 pb-1 text-xs text-rose-300">{batch.error}</p>}
-            <ul className="max-h-[60vh] overflow-y-auto">
+            <ul className="max-h-[60vh] overflow-y-auto overflow-x-auto">
               {roots.map((n) => (
                 <PickerNode
                   key={n.id}
@@ -369,6 +448,79 @@ export default function LearningPagesPage() {
                     <Check className="h-3.5 w-3.5" /> Saved
                   </span>
                 )}
+                <button
+                  onClick={copyPage}
+                  disabled={!draft.trim()}
+                  title="Copy markdown to clipboard"
+                  className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+                {isTTSSupported() && (
+                  <button
+                    onClick={toggleTTS}
+                    disabled={!draft.trim()}
+                    title={speaking ? "Stop listening" : "Listen to this page"}
+                    className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+                  >
+                    {speaking ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                    {speaking ? "Stop" : "Listen"}
+                  </button>
+                )}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDownload((v) => !v)}
+                    disabled={!draft.trim()}
+                    title="Download page"
+                    className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download ▾
+                  </button>
+                  {showDownload && (
+                    <div className="absolute right-0 top-full z-20 mt-1 min-w-[120px] rounded-lg border border-white/10 bg-slate-900 py-1 shadow-xl">
+                      {[
+                        { label: "Markdown (.md)", action: () => exportMarkdown(selectedTitle ?? "page", draft) },
+                        { label: "Word (.doc)", action: () => exportDoc(selectedTitle ?? "page", previewHtml) },
+                        { label: "PDF (print)", action: () => exportPdf(selectedTitle ?? "page") },
+                      ].map((opt) => (
+                        <button
+                          key={opt.label}
+                          onClick={() => { opt.action(); setShowDownload(false); }}
+                          className="block w-full px-4 py-1.5 text-left text-xs text-slate-200 hover:bg-white/5"
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="relative">
+                  <button
+                    onClick={() => { setShowDiscuss((v) => !v); setShowDownload(false); }}
+                    disabled={!draft.trim()}
+                    title="Discuss this page in an AI chat"
+                    className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Discuss ▾
+                  </button>
+                  {showDiscuss && (
+                    <div className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-lg border border-white/10 bg-slate-900 py-1 shadow-xl">
+                      {[
+                        { label: "ChatGPT", action: () => discussPage(selectedTitle ?? "page", draft, "chatgpt") },
+                        { label: "Gemini (copy prompt)", action: () => discussPage(selectedTitle ?? "page", draft, "gemini") },
+                      ].map((opt) => (
+                        <button
+                          key={opt.label}
+                          onClick={() => { opt.action(); setShowDiscuss(false); }}
+                          className="block w-full px-4 py-1.5 text-left text-xs text-slate-200 hover:bg-white/5"
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="flex rounded-lg border border-white/10 p-0.5">
                   <button
                     onClick={() => setTab("edit")}
@@ -391,12 +543,51 @@ export default function LearningPagesPage() {
             </div>
 
             {/* AI assist bar */}
-            <div className="border-b border-white/10 bg-brand-500/5 p-3">
+            <div className="border-b border-white/10 bg-brand-500/5 p-3 space-y-2">
+              {/* Mode toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Mode:</span>
+                {(["A", "B"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setGenMode(m)}
+                    className={`rounded px-2 py-0.5 text-xs font-medium transition ${genMode === m ? "bg-brand-600 text-white" : "text-slate-400 hover:text-white"}`}
+                  >
+                    {m === "A" ? "A · Free prompt" : "B · Structured"}
+                  </button>
+                ))}
+              </div>
+              {/* Mode B options */}
+              {genMode === "B" && (
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex items-center gap-1 text-xs text-slate-400">
+                    From:
+                    <select value={modeB.startLevel} onChange={(e) => setModeB((v) => ({ ...v, startLevel: e.target.value }))}
+                      className="rounded border border-white/15 bg-slate-900/60 px-1.5 py-0.5 text-xs text-white outline-none focus:border-brand-500">
+                      {LEVELS.map((l) => <option key={l}>{l}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-slate-400">
+                    To:
+                    <select value={modeB.topLevel} onChange={(e) => setModeB((v) => ({ ...v, topLevel: e.target.value }))}
+                      className="rounded border border-white/15 bg-slate-900/60 px-1.5 py-0.5 text-xs text-white outline-none focus:border-brand-500">
+                      {LEVELS.map((l) => <option key={l}>{l}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-slate-400">
+                    Style:
+                    <select value={modeB.style} onChange={(e) => setModeB((v) => ({ ...v, style: e.target.value }))}
+                      className="rounded border border-white/15 bg-slate-900/60 px-1.5 py-0.5 text-xs text-white outline-none focus:border-brand-500">
+                      {STYLES.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                  </label>
+                </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={`Ask AI to write or change this page (e.g. "add a section on edge cases")…`}
+                  placeholder={genMode === "B" ? `Optional extra instructions…` : `Ask AI to write or change this page (e.g. "add a section on edge cases")…`}
                   disabled={aiLoading}
                   className="flex-1 rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500 disabled:opacity-50"
                 />
@@ -440,14 +631,49 @@ export default function LearningPagesPage() {
                 className="min-h-[50vh] w-full resize-none bg-transparent p-5 font-mono text-sm leading-relaxed text-slate-100 outline-none"
               />
             ) : (
-              <div className="min-h-[50vh] p-5">
+              <div className="relative min-h-[50vh] p-5">
                 {draft.trim() ? (
-                  <div
-                    ref={previewRef}
-                    onClick={onPreviewClick}
-                    className="md-prose max-w-full break-words"
-                    dangerouslySetInnerHTML={{ __html: previewHtml }}
-                  />
+                  <>
+                    <div
+                      ref={previewRef}
+                      onClick={onPreviewClick}
+                      onMouseUp={onPreviewMouseUp}
+                      className="md-prose max-w-full break-words"
+                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                    />
+                    {/* Floating highlight toolbar */}
+                    {hlToolbar && (
+                      <div
+                        className="fixed z-50 flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-900/95 px-3 py-2 shadow-xl backdrop-blur"
+                        style={{ left: hlToolbar.x, top: hlToolbar.y - 52 }}
+                      >
+                        <Highlighter className="h-3.5 w-3.5 text-slate-400" />
+                        {(["yellow", "green", "blue", "pink"] as HighlightColor[]).map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => { setHlColor(c); applyHighlight(c); }}
+                            title={c}
+                            className={`h-5 w-5 rounded-full ring-2 transition ${hlColor === c ? "ring-white scale-110" : "ring-transparent hover:scale-105"} ${HIGHLIGHT_CLASSES[c].split(" ")[0]}`}
+                          />
+                        ))}
+                        <button onClick={() => setHlToolbar(null)} className="ml-1 text-slate-500 hover:text-white">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    {/* Per-page highlight count + clear */}
+                    {pageHighlights.length > 0 && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="text-xs text-slate-500">{pageHighlights.length} highlight{pageHighlights.length !== 1 ? "s" : ""}</span>
+                        <button
+                          onClick={() => selectedId && highlightStore.clearPage(selectedId)}
+                          className="text-xs text-slate-500 hover:text-rose-400 underline"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <p className="text-sm text-slate-500">Nothing to preview yet.</p>
                 )}

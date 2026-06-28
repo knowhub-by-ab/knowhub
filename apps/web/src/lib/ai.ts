@@ -1,4 +1,4 @@
-import type { ChatMessage, ProviderKey } from "./types";
+import type { ChatMessage, ProviderKey, AiRole } from "./types";
 import { toUpstream } from "./providers";
 
 // AI client. Sends the conversation plus the user's configured provider keys
@@ -8,12 +8,85 @@ import { toUpstream } from "./providers";
 
 export class AiError extends Error {}
 
+// Puter.js global — loaded via CDN in index.html
+declare const puter: {
+  ai: {
+    chat(
+      messages: Array<{ role: string; content: string }>,
+      opts?: { model?: string; stream?: boolean }
+    ): Promise<
+      | { message?: { content?: Array<{ text?: string }> } }
+      | AsyncIterable<{ text?: string }>
+    >;
+  };
+};
+
+/** Sort keys so those tagged for `role` (or "any") come first. */
+function sortByRole(keys: ProviderKey[], role: AiRole | undefined): ProviderKey[] {
+  if (!role || role === "any") return keys;
+  return [...keys].sort((a, b) => {
+    const aMatch = !a.roles || a.roles.includes(role) || a.roles.includes("any") ? 0 : 1;
+    const bMatch = !b.roles || b.roles.includes(role) || b.roles.includes("any") ? 0 : 1;
+    return aMatch - bMatch;
+  });
+}
+
+/** Try to call Puter.js chat directly in the browser. Returns null if Puter unavailable. */
+async function puterChat(messages: ChatMessage[]): Promise<string | null> {
+  try {
+    if (typeof puter === "undefined" || !puter?.ai?.chat) return null;
+    const result = await puter.ai.chat(
+      messages.map((m) => ({ role: m.role, content: m.content }))
+    );
+    const r = result as { message?: { content?: Array<{ text?: string }> } };
+    const text = r?.message?.content?.[0]?.text ?? "";
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Try to stream from Puter.js. Calls onDelta for each chunk. Returns full text or null. */
+async function puterStream(
+  messages: ChatMessage[],
+  onDelta: (piece: string) => void
+): Promise<string | null> {
+  try {
+    if (typeof puter === "undefined" || !puter?.ai?.chat) return null;
+    const stream = await puter.ai.chat(
+      messages.map((m) => ({ role: m.role, content: m.content })),
+      { stream: true }
+    );
+    let full = "";
+    for await (const chunk of stream as AsyncIterable<{ text?: string }>) {
+      const piece = chunk?.text ?? "";
+      if (piece) {
+        full += piece;
+        onDelta(piece);
+      }
+    }
+    return full || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function chatCompletion(
   keys: ProviderKey[],
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  role?: AiRole
 ): Promise<{ content: string; provider?: string }> {
-  const upstreams = keys
-    .filter((k) => k.apiKey.trim() && (k.provider !== "custom" || k.baseUrl?.trim()))
+  const sorted = sortByRole(keys, role);
+
+  // Try Puter keyless first if it's in the sorted list at the top
+  const hasPuter = sorted.some((k) => k.provider === "puter");
+  if (hasPuter) {
+    const text = await puterChat(messages);
+    if (text) return { content: text, provider: "puter" };
+  }
+
+  const upstreams = sorted
+    .filter((k) => k.provider !== "puter" && k.apiKey.trim() && (k.provider !== "custom" || k.baseUrl?.trim()))
     .map(toUpstream);
 
   let res: Response;
@@ -52,10 +125,20 @@ export async function chatCompletion(
 export async function chatStream(
   keys: ProviderKey[],
   messages: ChatMessage[],
-  onDelta: (piece: string) => void
+  onDelta: (piece: string) => void,
+  role?: AiRole
 ): Promise<string> {
-  const upstreams = keys
-    .filter((k) => k.apiKey.trim() && (k.provider !== "custom" || k.baseUrl?.trim()))
+  const sorted = sortByRole(keys, role);
+
+  // Try Puter streaming if it's in the sorted list
+  const hasPuter = sorted.some((k) => k.provider === "puter");
+  if (hasPuter) {
+    const text = await puterStream(messages, onDelta);
+    if (text) return text;
+  }
+
+  const upstreams = sorted
+    .filter((k) => k.provider !== "puter" && k.apiKey.trim() && (k.provider !== "custom" || k.baseUrl?.trim()))
     .map(toUpstream);
 
   let res: Response;
@@ -145,8 +228,9 @@ export function extractJson<T>(text: string): T {
 /** Ask the AI and parse its reply as JSON of type T. */
 export async function chatJSON<T>(
   keys: ProviderKey[],
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  role?: AiRole
 ): Promise<T> {
-  const { content } = await chatCompletion(keys, messages);
+  const { content } = await chatCompletion(keys, messages, role);
   return extractJson<T>(content);
 }

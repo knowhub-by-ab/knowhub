@@ -10,32 +10,57 @@ import {
 } from "lucide-react";
 import { aiKeys, useAppData } from "@/lib/store";
 import { PROVIDER_PRESETS } from "@/lib/providers";
-import type { ProviderId } from "@/lib/types";
+import type { AiRole, ProviderId } from "@/lib/types";
 
 const PROVIDER_IDS = Object.keys(PROVIDER_PRESETS) as ProviderId[];
 
+const ALL_ROLES: AiRole[] = ["tree", "pages", "assessments", "other", "any"];
+const ROLE_LABELS: Record<AiRole, string> = {
+  tree: "Tree",
+  pages: "Pages",
+  assessments: "Assessments",
+  other: "Tutor/Other",
+  any: "Any (all uses)",
+};
+
 function mask(key: string): string {
+  if (!key) return "(keyless)";
   if (key.length <= 10) return "•".repeat(key.length);
   return `${key.slice(0, 6)}…${key.slice(-4)}`;
 }
 
 export default function SettingsPage() {
   const data = useAppData();
-  const [provider, setProvider] = useState<ProviderId>("apifreellm");
+  const [provider, setProvider] = useState<ProviderId>("gemini");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
+  const [selectedRoles, setSelectedRoles] = useState<AiRole[]>([]);
 
   const preset = PROVIDER_PRESETS[provider];
   const isCustom = provider === "custom";
-  const canAdd = apiKey.trim().length > 0 && (!isCustom || baseUrl.trim().length > 0);
+  const isPuter = provider === "puter";
+  const canAdd = isPuter || (apiKey.trim().length > 0 && (!isCustom || baseUrl.trim().length > 0));
+
+  function toggleRole(role: AiRole) {
+    setSelectedRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+    );
+  }
 
   function add() {
     if (!canAdd) return;
-    aiKeys.add({ provider, apiKey, baseUrl: isCustom ? baseUrl : undefined, model });
+    aiKeys.add({
+      provider,
+      apiKey: isPuter ? "" : apiKey,
+      baseUrl: isCustom ? baseUrl : undefined,
+      model: model.trim() || undefined,
+      roles: selectedRoles.length ? selectedRoles : undefined,
+    });
     setApiKey("");
     setBaseUrl("");
     setModel("");
+    setSelectedRoles([]);
   }
 
   return (
@@ -55,17 +80,17 @@ export default function SettingsPage() {
           <KeyRound className="h-4 w-4 text-brand-300" /> AI provider keys
         </h2>
         <p className="mt-1 text-sm text-slate-400">
-          The AI Tutor tries these <strong>in order, top to bottom</strong>. When one is
-          rate-limited or out of quota, it automatically falls through to the next — and
-          keys are kept, so they work again when their quota renews. Add as many as you like
-          (e.g. ApiFreeLLM first, then your 9 Gemini keys).
+          The AI Tutor tries these <strong>in order, top to bottom</strong>. Tag each key
+          with a role so the router sends the right requests to the right key. Keys without
+          a role tag are used for everything. Recommended: add Puter.js (free, no key
+          needed) + OpenRouter free models as fallbacks.
         </p>
 
         {/* Existing keys */}
         <ul className="mt-5 space-y-2">
           {data.aiKeys.length === 0 && (
             <li className="rounded-lg border border-dashed border-white/15 px-4 py-6 text-center text-sm text-slate-500">
-              No keys yet. Add one below to power the AI Tutor.
+              No keys yet. Add one below to power the AI features.
             </li>
           )}
           {data.aiKeys.map((k, i) => {
@@ -73,9 +98,9 @@ export default function SettingsPage() {
             return (
               <li
                 key={k.id}
-                className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2"
+                className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2"
               >
-                <span className="w-5 text-center text-xs font-semibold text-slate-500">
+                <span className="mt-1 w-5 text-center text-xs font-semibold text-slate-500">
                   {i + 1}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -87,6 +112,32 @@ export default function SettingsPage() {
                   </div>
                   <div className="truncate text-xs text-slate-500">
                     {k.model || p.model}
+                  </div>
+                  {/* Role chips */}
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {ALL_ROLES.map((role) => {
+                      const active = k.roles?.includes(role);
+                      return (
+                        <button
+                          key={role}
+                          onClick={() => {
+                            const current = k.roles ?? [];
+                            const next = current.includes(role)
+                              ? current.filter((r) => r !== role)
+                              : [...current, role];
+                            aiKeys.updateRoles(k.id, next);
+                          }}
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-medium ring-1 transition ${
+                            active
+                              ? "bg-brand-600/30 text-brand-200 ring-brand-500/50"
+                              : "bg-white/5 text-slate-500 ring-white/10 hover:text-slate-300"
+                          }`}
+                          title={active ? `Remove "${role}" tag` : `Tag as "${role}"`}
+                        >
+                          {ROLE_LABELS[role]}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -126,7 +177,10 @@ export default function SettingsPage() {
               Provider
               <select
                 value={provider}
-                onChange={(e) => setProvider(e.target.value as ProviderId)}
+                onChange={(e) => {
+                  setProvider(e.target.value as ProviderId);
+                  setApiKey("");
+                }}
                 className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
               >
                 {PROVIDER_IDS.map((id) => (
@@ -136,17 +190,34 @@ export default function SettingsPage() {
                 ))}
               </select>
             </label>
-            <label className="text-xs font-medium text-slate-300">
-              API key
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={preset.keyHint}
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
-              />
-            </label>
+            {!isPuter && (
+              <label className="text-xs font-medium text-slate-300">
+                API key
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={preset.keyHint}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+                />
+              </label>
+            )}
           </div>
+
+          {isPuter && (
+            <p className="mt-2 rounded-lg border border-brand-500/20 bg-brand-500/10 px-3 py-2 text-xs text-brand-200">
+              Puter.js is free and keyless — no API key needed. It calls AI directly from
+              your browser using Puter's free quota.
+            </p>
+          )}
+
+          {provider === "openrouter" && (
+            <p className="mt-2 text-xs text-slate-400">
+              OpenRouter offers <strong>free models</strong> (e.g.{" "}
+              <code className="text-slate-300">meta-llama/llama-3.3-70b-instruct:free</code>).
+              Great for adding extra fallback capacity at zero cost.
+            </p>
+          )}
 
           {isCustom && (
             <label className="mt-2 block text-xs font-medium text-slate-300">
@@ -170,6 +241,29 @@ export default function SettingsPage() {
             />
           </label>
 
+          {/* Role selector for new key */}
+          <div className="mt-2">
+            <span className="text-xs font-medium text-slate-300">
+              Roles <span className="text-slate-500">(optional — leave blank to use for everything)</span>
+            </span>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {ALL_ROLES.map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => toggleRole(role)}
+                  className={`rounded px-2 py-0.5 text-xs font-medium ring-1 transition ${
+                    selectedRoles.includes(role)
+                      ? "bg-brand-600/30 text-brand-200 ring-brand-500/50"
+                      : "bg-white/5 text-slate-400 ring-white/10 hover:text-slate-200"
+                  }`}
+                >
+                  {ROLE_LABELS[role]}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-3 flex items-center justify-between">
             <button
               onClick={add}
@@ -192,9 +286,9 @@ export default function SettingsPage() {
         </div>
 
         <p className="mt-4 text-xs text-slate-500">
-          When you're signed in, your keys and all your data are saved to your account and
-          sync across every device and the Android app. Signed out, they're stored only in
-          this browser. Keys are sent over HTTPS per request and never committed or shared.
+          When signed in, your keys and data sync across devices. Signed out, they're
+          stored only in this browser. Keys are sent over HTTPS per request and never
+          committed or shared.
         </p>
       </section>
     </div>

@@ -1,6 +1,6 @@
 import { Suspense, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { Menu, X, LogOut, Loader2 } from "lucide-react";
+import { LogOut, Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
 import LoginScreen from "@/components/LoginScreen";
 import SyncButton from "@/components/SyncButton";
@@ -31,16 +31,16 @@ export default function AppLayout() {
     <div className="min-h-screen bg-aurora">
       {/* Mobile top bar */}
       <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 lg:hidden">
-        <Link to="/">
-          <Logo />
-        </Link>
         <button
           aria-label="Toggle navigation"
           onClick={() => setOpen((v) => !v)}
-          className="rounded-lg border border-white/10 p-2 text-slate-300 hover:bg-white/5"
+          className="rounded-lg p-1 text-slate-300 hover:bg-white/5"
         >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          <Logo />
         </button>
+        <div className="flex items-center gap-2">
+          {githubConnected && <SyncButton />}
+        </div>
       </header>
 
       <div className="mx-auto flex max-w-[1400px]">
@@ -110,21 +110,27 @@ export default function AppLayout() {
         </aside>
 
         {/* Main content */}
-        <main className="min-h-screen min-w-0 flex-1 px-4 py-6 sm:px-8">
+        <main className="flex min-h-screen min-w-0 flex-1 flex-col px-4 py-6 sm:px-8">
+          {/* Desktop sync button */}
           {githubConnected && (
-            <div className="mb-3 flex justify-end">
+            <div className="mb-3 hidden justify-end lg:flex">
               <SyncButton />
             </div>
           )}
-          <Suspense
-            fallback={
-              <div className="flex items-center gap-2 py-10 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-              </div>
-            }
-          >
-            <Outlet />
-          </Suspense>
+          <div className="flex-1">
+            <Suspense
+              fallback={
+                <div className="flex items-center gap-2 py-10 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
+          </div>
+          <footer className="mt-8 border-t border-white/5 pt-4 text-center text-xs text-slate-600">
+            Made with ❤️ by Aishee B. &amp; Claude
+          </footer>
         </main>
       </div>
     </div>

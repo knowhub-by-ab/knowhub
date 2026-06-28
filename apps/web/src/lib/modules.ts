@@ -12,6 +12,9 @@ import {
   GitBranch,
   Settings,
   Compass,
+  BookOpen,
+  Layers,
+  Youtube,
   type LucideIcon,
 } from "lucide-react";
 
@@ -111,6 +114,30 @@ export const MODULES: ModuleDef[] = [
     icon: GitBranch,
     summary: "Connect a GitHub repo as the source of truth for your knowledge.",
     prdRef: "Module 2",
+  },
+  {
+    id: "videos",
+    label: "Videos",
+    path: "/app/videos",
+    icon: Youtube,
+    summary: "AI-suggested YouTube videos (<20 min) for your topics.",
+    prdRef: "Module G6",
+  },
+  {
+    id: "question-bank",
+    label: "Question Bank",
+    path: "/app/question-bank",
+    icon: BookOpen,
+    summary: "Generate question banks from your pages or any text.",
+    prdRef: "Module E6",
+  },
+  {
+    id: "flashcards",
+    label: "Flashcards",
+    path: "/app/flashcards",
+    icon: Layers,
+    summary: "Generate flashcards from learning pages and review them.",
+    prdRef: "Module G5",
   },
   {
     id: "guide",

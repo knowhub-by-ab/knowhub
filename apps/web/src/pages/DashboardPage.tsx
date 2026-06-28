@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Github, Info } from "lucide-react";
+import { ArrowRight, Github } from "lucide-react";
 import { MODULES } from "@/lib/modules";
 import { summarizeProgress, tree, useAppData } from "@/lib/store";
 
@@ -32,16 +32,6 @@ export default function DashboardPage() {
         >
           <Github className="h-4 w-4" /> Connect repository
         </Link>
-      </div>
-
-      {/* Phase banner — honest status for early build */}
-      <div className="mt-6 flex items-start gap-3 rounded-xl border border-brand-500/30 bg-brand-500/10 p-4 text-sm text-brand-100">
-        <Info className="mt-0.5 h-4 w-4 shrink-0" />
-        <p>
-          <strong>Foundation preview.</strong> The app shell, navigation and all module
-          screens are in place and deploying automatically. Features (Google login, GitHub
-          sync, AI tutor, tests) are being added module by module.
-        </p>
       </div>
 
       {/* Stats */}

@@ -4,11 +4,13 @@ export interface ProviderPreset {
   label: string;
   baseUrl: string;
   model: string;
-  kind: "openai" | "apifreellm";
+  kind: "openai" | "apifreellm" | "puter";
   /** Hint shown in the key input. */
   keyHint: string;
   /** Where to get a free key. */
   getKeyUrl?: string;
+  /** If true, no API key is required. */
+  keyless?: boolean;
 }
 
 export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
@@ -51,6 +53,15 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     kind: "openai",
     keyHint: "sk-…",
     getKeyUrl: "https://platform.openai.com/api-keys",
+  },
+  puter: {
+    label: "Puter.js (free, keyless)",
+    baseUrl: "",
+    model: "gpt-4o-mini",
+    kind: "puter",
+    keyHint: "(no API key needed)",
+    getKeyUrl: "https://puter.com",
+    keyless: true,
   },
   custom: {
     label: "Custom (OpenAI-compatible)",

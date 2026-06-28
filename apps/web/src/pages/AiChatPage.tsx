@@ -1,8 +1,18 @@
-import { useRef, useState } from "react";
-import { MessagesSquare, Send, Loader2 } from "lucide-react";
-import { useAppData } from "@/lib/store";
+import { useEffect, useRef, useState } from "react";
+import {
+  MessagesSquare,
+  Send,
+  Loader2,
+  Plus,
+  Trash2,
+  Pencil,
+  Check,
+  X,
+} from "lucide-react";
+import { useAppData, chatSessions as sessionsStore } from "@/lib/store";
 import { chatStream, AiError } from "@/lib/ai";
 import { buildTutorContext } from "@/lib/aiActions";
+import { renderMarkdown } from "@/lib/markdown";
 import type { ChatMessage } from "@/lib/types";
 
 const SYSTEM_PROMPT: ChatMessage = {
@@ -11,7 +21,7 @@ const SYSTEM_PROMPT: ChatMessage = {
     "You are KnowHub's AI tutor. You are given the learner's own topic tree and the " +
     "content of their relevant learning pages as context. " +
     "If a relevant page already exists, answer from it and point the learner to it by " +
-    "name (e.g. “see your page: X”). If the topic is NOT in their tree, briefly say " +
+    "name (e.g. 'see your page: X'). If the topic is NOT in their tree, briefly say " +
     "where it would fit in their hierarchy and suggest they create it — they can tap " +
     "Generate on the Learning Pages tab, or add it in the Learning Tree. " +
     "Explain clearly from beginner to professional, be concise, and use examples.",
@@ -19,36 +29,83 @@ const SYSTEM_PROMPT: ChatMessage = {
 
 export default function AiChatPage() {
   const data = useAppData();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(
+    data.chatSessions[0]?.id ?? null
+  );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
-  // The tutor works as long as at least one key is configured (here or server-side).
-  const configured = true;
   const keyCount = data.aiKeys.length;
+  const activeSession = data.chatSessions.find((s) => s.id === activeId) ?? null;
+  const messages: ChatMessage[] = activeSession?.messages ?? [];
+
+  // Keep activeId pointing at a valid session
+  useEffect(() => {
+    if (!activeId && data.chatSessions.length > 0) {
+      setActiveId(data.chatSessions[0].id);
+    }
+    if (activeId && !data.chatSessions.some((s) => s.id === activeId)) {
+      setActiveId(data.chatSessions[0]?.id ?? null);
+    }
+  }, [data.chatSessions, activeId]);
+
+  function newSession() {
+    const s = sessionsStore.create();
+    setActiveId(s.id);
+    setError(null);
+  }
 
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
     setError(null);
-    const next = [...messages, { role: "user", content: text } as ChatMessage];
-    setMessages(next);
+
+    // Create session if none active
+    let sid = activeId;
+    if (!sid) {
+      const s = sessionsStore.create(text);
+      sid = s.id;
+      setActiveId(sid);
+    }
+
+    const next: ChatMessage[] = [...messages, { role: "user", content: text }];
+    sessionsStore.setMessages(sid, next);
+    // Auto-title from first message
+    if (messages.length === 0) {
+      sessionsStore.rename(sid, text.slice(0, 40));
+    }
     setInput("");
     setLoading(true);
+
     let acc = "";
-    setMessages([...next, { role: "assistant", content: "" }]);
-    const context: ChatMessage = { role: "system", content: buildTutorContext(data, text) };
+    const withReply: ChatMessage[] = [...next, { role: "assistant", content: "" }];
+    sessionsStore.setMessages(sid, withReply);
+
+    const context: ChatMessage = {
+      role: "system",
+      content: buildTutorContext(data, text),
+    };
     try {
-      await chatStream(data.aiKeys, [SYSTEM_PROMPT, context, ...next], (piece) => {
-        acc += piece;
-        setMessages([...next, { role: "assistant", content: acc }]);
-        endRef.current?.scrollIntoView({ behavior: "smooth" });
-      });
+      await chatStream(
+        data.aiKeys,
+        [SYSTEM_PROMPT, context, ...next],
+        (piece) => {
+          acc += piece;
+          sessionsStore.setMessages(sid!, [
+            ...next,
+            { role: "assistant", content: acc },
+          ]);
+          endRef.current?.scrollIntoView({ behavior: "smooth" });
+        },
+        "other"
+      );
     } catch (err) {
       setError(err instanceof AiError ? err.message : "Something went wrong.");
-      setMessages(next);
+      sessionsStore.setMessages(sid, next);
     } finally {
       setLoading(false);
       requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -56,83 +113,162 @@ export default function AiChatPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-3xl flex-col">
-      <div className="flex items-center gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-600/20 text-brand-300">
-          <MessagesSquare className="h-6 w-6" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold text-white">AI Tutor</h1>
-          <p className="text-sm text-slate-400">
-            Ask anything.{" "}
-            {keyCount > 0
-              ? `Using ${keyCount} configured provider key${keyCount === 1 ? "" : "s"} (with fallback).`
-              : "Add provider keys in Settings."}
-          </p>
+    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-5xl gap-4">
+      {/* Session rail */}
+      <aside className="flex w-52 shrink-0 flex-col gap-1 rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+        <button
+          onClick={newSession}
+          className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-500"
+        >
+          <Plus className="h-3.5 w-3.5" /> New chat
+        </button>
+        <div className="mt-1 flex-1 space-y-0.5 overflow-y-auto">
+          {data.chatSessions.length === 0 && (
+            <p className="px-2 py-4 text-center text-xs text-slate-600">No chats yet</p>
+          )}
+          {data.chatSessions.map((s) => (
+            <div
+              key={s.id}
+              className={`group flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
+                s.id === activeId
+                  ? "bg-brand-600/20 text-white ring-1 ring-brand-500/30"
+                  : "text-slate-400 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              {renamingId === s.id ? (
+                <>
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        sessionsStore.rename(s.id, renameValue);
+                        setRenamingId(null);
+                      }
+                      if (e.key === "Escape") setRenamingId(null);
+                    }}
+                    className="min-w-0 flex-1 rounded bg-slate-800 px-1 py-0.5 text-xs text-white outline-none"
+                  />
+                  <button onClick={() => { sessionsStore.rename(s.id, renameValue); setRenamingId(null); }}><Check className="h-3 w-3" /></button>
+                  <button onClick={() => setRenamingId(null)}><X className="h-3 w-3" /></button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="min-w-0 flex-1 truncate text-left"
+                    onClick={() => { setActiveId(s.id); setError(null); }}
+                  >
+                    {s.title}
+                  </button>
+                  <button
+                    className="hidden shrink-0 rounded p-0.5 hover:text-brand-300 group-hover:block"
+                    onClick={() => { setRenamingId(s.id); setRenameValue(s.title); }}
+                    title="Rename"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    className="hidden shrink-0 rounded p-0.5 hover:text-rose-400 group-hover:block"
+                    onClick={() => sessionsStore.remove(s.id)}
+                    title="Delete"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
         </div>
-      </div>
+      </aside>
 
-      <div className="mt-4 flex-1 space-y-4 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-        {messages.length === 0 ? (
-          <div className="grid h-full place-items-center text-center text-sm text-slate-500">
-            <p>
-              Try: <span className="text-slate-300">"Teach me the basics of Docker."</span>
+      {/* Chat area */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-600/20 text-brand-300">
+            <MessagesSquare className="h-6 w-6" />
+          </span>
+          <div>
+            <h1 className="text-2xl font-bold text-white">AI Tutor</h1>
+            <p className="text-sm text-slate-400">
+              Ask anything.{" "}
+              {keyCount > 0
+                ? `Using ${keyCount} key${keyCount === 1 ? "" : "s"} (with fallback).`
+                : "Add provider keys in Settings."}
             </p>
           </div>
-        ) : (
-          messages.map((m, i) => (
-            <div
-              key={i}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm ${
-                  m.role === "user"
-                    ? "bg-brand-600 text-white"
-                    : "bg-white/[0.06] text-slate-100 ring-1 ring-white/10"
-                }`}
-              >
-                {m.content}
-              </div>
-            </div>
-          ))
-        )}
-        {loading && (
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin" /> Thinking…
-          </div>
-        )}
-        {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
-            {error}
-          </div>
-        )}
-        <div ref={endRef} />
-      </div>
+        </div>
 
-      <div className="mt-3 flex items-end gap-2">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          rows={1}
-          placeholder={configured ? "Ask your tutor…" : "Configure Settings first…"}
-          disabled={!configured || loading}
-          className="max-h-40 flex-1 resize-none rounded-xl border border-white/15 bg-slate-900/60 px-4 py-3 text-sm text-white outline-none focus:border-brand-500 disabled:opacity-50"
-        />
-        <button
-          onClick={send}
-          disabled={!configured || loading || !input.trim()}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-brand-600 text-white transition hover:bg-brand-500 disabled:opacity-40"
-          aria-label="Send"
-        >
-          <Send className="h-5 w-5" />
-        </button>
+        <div className="mt-4 flex-1 space-y-4 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+          {messages.length === 0 ? (
+            <div className="grid h-full place-items-center text-center text-sm text-slate-500">
+              <p>
+                Try:{" "}
+                <span className="text-slate-300">"Teach me the basics of Docker."</span>
+              </p>
+            </div>
+          ) : (
+            messages.map((m, i) => (
+              <div
+                key={i}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+                    m.role === "user"
+                      ? "bg-brand-600 text-white"
+                      : "bg-white/[0.06] text-slate-100 ring-1 ring-white/10"
+                  }`}
+                >
+                  {m.role === "user" ? (
+                    <span className="whitespace-pre-wrap">{m.content}</span>
+                  ) : (
+                    <div
+                      className="md-prose"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
+                    />
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Thinking…
+            </div>
+          )}
+          {error && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+              {error}
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+
+        <div className="mt-3 flex items-end gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            rows={1}
+            placeholder="Ask your tutor…"
+            disabled={loading}
+            className="max-h-40 flex-1 resize-none rounded-xl border border-white/15 bg-slate-900/60 px-4 py-3 text-sm text-white outline-none focus:border-brand-500 disabled:opacity-50"
+          />
+          <button
+            onClick={send}
+            disabled={loading || !input.trim()}
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-brand-600 text-white transition hover:bg-brand-500 disabled:opacity-40"
+            aria-label="Send"
+          >
+            <Send className="h-5 w-5" />
+          </button>
+        </div>
       </div>
     </div>
   );

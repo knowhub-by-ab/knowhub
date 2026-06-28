@@ -90,7 +90,7 @@ export default function ProgressPage() {
       Math.max(...qz.attempts.map((a) => (a.total ? (a.score / a.total) * 100 : 0)));
     const bests = withAttempts.map(bestPctOf);
     const allAttempts = data.quizzes
-      .flatMap((q) => q.attempts.map((a) => ({ at: a.at, pct: a.total ? (a.score / a.total) * 100 : 0 })))
+      .flatMap((q) => q.attempts.map((a) => ({ at: a.takenAt, pct: a.total ? (a.score / a.total) * 100 : 0 })))
       .sort((a, b) => a.at - b.at);
     const passRate =
       allAttempts.length === 0
@@ -284,16 +284,24 @@ export default function ProgressPage() {
                 <GapCard
                   icon={ClipboardCheck}
                   title={`${completedUntested.length} completed topic${completedUntested.length === 1 ? "" : "s"} not tested`}
-                  items={completedUntested.slice(0, 5).map((n) => ({ id: n.id, title: n.title, to: "/app/assessments" }))}
-                  cta="Make a quiz"
+                  items={completedUntested.slice(0, 5).map((n) => ({
+                    id: n.id,
+                    title: n.title,
+                    to: `/app/assessments?topic=${encodeURIComponent(n.title)}&count=10`,
+                  }))}
+                  cta="Generate a quiz"
                 />
               )}
               {quizStats.weakest.length > 0 && (
                 <GapCard
                   icon={AlertTriangle}
                   title="Weak areas to revisit"
-                  items={quizStats.weakest.map((q) => ({ id: q.title, title: `${q.title} — ${q.best}%`, to: "/app/assessments" }))}
-                  cta="Retake quiz"
+                  items={quizStats.weakest.map((q) => ({
+                    id: q.title,
+                    title: `${q.title} — ${q.best}%`,
+                    to: `/app/assessments?topic=${encodeURIComponent(q.title)}&count=10`,
+                  }))}
+                  cta="Generate a quiz"
                 />
               )}
             </div>
