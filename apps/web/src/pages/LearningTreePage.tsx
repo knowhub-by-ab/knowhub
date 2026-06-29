@@ -298,7 +298,7 @@ export default function LearningTreePage() {
   async function generate() {
     const rawTopic = genTopic.trim();
     if (!rawTopic || genLoading) return;
-    const topic = treeMode === "B"
+    const topic = treeMode === "A"
       ? `${rawTopic} (from ${treeModeB.startLevel} to ${treeModeB.topLevel} level, style: ${treeModeB.style})`
       : rawTopic;
     setGenError(null);
@@ -363,11 +363,11 @@ export default function LearningTreePage() {
               onClick={() => setTreeMode(m)}
               className={`rounded px-2 py-0.5 text-xs font-medium transition ${treeMode === m ? "bg-brand-600 text-white" : "text-slate-400 hover:text-white"}`}
             >
-              {m === "A" ? "A · Free-style Prompt" : "B · Structured Prompt"}
+              {m === "A" ? "A · Structured Prompt" : "B · Free-style Prompt"}
             </button>
           ))}
         </div>
-        {treeMode === "B" && (
+        {treeMode === "A" && (
           <div className="flex flex-wrap gap-2">
             <label className="flex items-center gap-1 text-xs text-slate-400">
               From:

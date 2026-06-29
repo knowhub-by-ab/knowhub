@@ -141,7 +141,7 @@ export const MODULES: ModuleDef[] = [
   },
   {
     id: "guide",
-    label: "Guide",
+    label: "KnowHub Guide",
     path: "/app/guide",
     icon: Compass,
     summary: "New here? A step-by-step walkthrough of how to use KnowHub.",

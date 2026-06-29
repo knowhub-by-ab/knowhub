@@ -332,7 +332,7 @@ export default function LearningPagesPage() {
       let instruction: string;
       if (mode === "improve") {
         instruction = prompt.trim() || "Improve, expand and correct this page; keep it well structured.";
-      } else if (genMode === "B") {
+      } else if (genMode === "A") {
         instruction = `Write a complete learning page for "${selectedTitle}". Target audience: someone starting at ${modeB.startLevel} level, aiming to reach ${modeB.topLevel} level. Writing style: ${modeB.style}.${prompt.trim() ? ` Additional instructions: ${prompt.trim()}` : ""}`;
       } else {
         instruction = prompt.trim() || `Write a complete learning page for "${selectedTitle}".`;
@@ -553,12 +553,12 @@ export default function LearningPagesPage() {
                     onClick={() => setGenMode(m)}
                     className={`rounded px-2 py-0.5 text-xs font-medium transition ${genMode === m ? "bg-brand-600 text-white" : "text-slate-400 hover:text-white"}`}
                   >
-                    {m === "A" ? "A · Free-style Prompt" : "B · Structured Prompt"}
+                    {m === "A" ? "A · Structured Prompt" : "B · Free-style Prompt"}
                   </button>
                 ))}
               </div>
-              {/* Mode B options */}
-              {genMode === "B" && (
+              {/* Mode A (Structured) options */}
+              {genMode === "A" && (
                 <div className="flex flex-wrap gap-2">
                   <label className="flex items-center gap-1 text-xs text-slate-400">
                     From:
@@ -587,7 +587,7 @@ export default function LearningPagesPage() {
                 <input
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={genMode === "B" ? `Optional extra instructions…` : `Ask AI to write or change this page (e.g. "add a section on edge cases")…`}
+                  placeholder={genMode === "A" ? `Optional extra instructions for this structured prompt…` : `Ask AI to write or change this page (e.g. "add a section on edge cases")…`}
                   disabled={aiLoading}
                   className="flex-1 rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500 disabled:opacity-50"
                 />
