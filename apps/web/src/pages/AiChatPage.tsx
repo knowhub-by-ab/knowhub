@@ -8,6 +8,8 @@ import {
   Pencil,
   Check,
   X,
+  PanelLeftOpen,
+  PanelLeftClose,
 } from "lucide-react";
 import { useAppData, chatSessions as sessionsStore } from "@/lib/store";
 import { chatStream, AiError } from "@/lib/ai";
@@ -33,6 +35,7 @@ export default function AiChatPage() {
     data.chatSessions[0]?.id ?? null
   );
   const [input, setInput] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -113,9 +116,22 @@ export default function AiChatPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-5xl gap-4">
-      {/* Session rail */}
-      <aside className="flex w-52 shrink-0 flex-col gap-1 rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-5xl gap-4 relative">
+      {/* Mobile overlay backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      {/* Session rail — hidden on mobile, shown as overlay drawer when toggled */}
+      <aside className={`
+        absolute lg:relative z-40 lg:z-auto
+        flex w-52 shrink-0 flex-col gap-1 rounded-2xl border border-white/10 bg-slate-950 lg:bg-white/[0.02] p-2
+        h-full lg:h-auto
+        transition-transform duration-200
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-[110%]"} lg:translate-x-0
+      `}>
         <button
           onClick={newSession}
           className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-500"
@@ -185,6 +201,13 @@ export default function AiChatPage() {
       {/* Chat area */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-3">
+          <button
+            className="lg:hidden grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"
+            onClick={() => setSidebarOpen((v) => !v)}
+            aria-label="Toggle sessions"
+          >
+            {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+          </button>
           <span className="grid h-11 w-11 place-items-center rounded-2xl bg-brand-600/20 text-brand-300">
             <MessagesSquare className="h-6 w-6" />
           </span>

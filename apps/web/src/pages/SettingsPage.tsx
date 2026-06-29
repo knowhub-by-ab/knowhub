@@ -7,6 +7,7 @@ import {
   ChevronDown,
   KeyRound,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import { aiKeys, useAppData } from "@/lib/store";
 import { PROVIDER_PRESETS } from "@/lib/providers";
@@ -27,6 +28,64 @@ function mask(key: string): string {
   if (!key) return "(keyless)";
   if (key.length <= 10) return "•".repeat(key.length);
   return `${key.slice(0, 6)}…${key.slice(-4)}`;
+}
+
+const CURRENT_VERSION = "1.0.3";
+
+function CheckForUpdates() {
+  const [status, setStatus] = useState<"idle" | "checking" | "latest" | "update">("idle");
+  const [remoteVersion, setRemoteVersion] = useState("");
+
+  async function check() {
+    setStatus("checking");
+    try {
+      const res = await fetch("https://knowhub-ai.pages.dev/version.json?t=" + Date.now());
+      if (!res.ok) throw new Error("not found");
+      const data = await res.json();
+      setRemoteVersion(data.version ?? "");
+      setStatus(data.version !== CURRENT_VERSION ? "update" : "latest");
+    } catch {
+      setStatus("latest"); // Treat network error as "can't check, assume fine"
+    }
+  }
+
+  return (
+    <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600/20 text-brand-300">
+          <RefreshCw className="h-4 w-4" />
+        </span>
+        <h2 className="font-semibold text-white">Check for Updates</h2>
+      </div>
+      <p className="mt-2 text-sm text-slate-400">
+        Current version: <span className="font-mono text-slate-200">{CURRENT_VERSION}</span>
+      </p>
+      {status === "latest" && (
+        <p className="mt-2 text-sm text-emerald-400">You're on the latest version.</p>
+      )}
+      {status === "update" && (
+        <p className="mt-2 text-sm text-amber-400">
+          Update available: <span className="font-mono">{remoteVersion}</span>.{" "}
+          <a
+            href="https://github.com/knowhub-by-ab/knowhub/releases"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-white"
+          >
+            View releases ↗
+          </a>
+        </p>
+      )}
+      <button
+        onClick={check}
+        disabled={status === "checking"}
+        className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-slate-200 hover:bg-white/10 disabled:opacity-50"
+      >
+        <RefreshCw className={`h-4 w-4 ${status === "checking" ? "animate-spin" : ""}`} />
+        {status === "checking" ? "Checking…" : "Check now"}
+      </button>
+    </section>
+  );
 }
 
 export default function SettingsPage() {
@@ -291,6 +350,7 @@ export default function SettingsPage() {
           committed or shared.
         </p>
       </section>
+      <CheckForUpdates />
     </div>
   );
 }

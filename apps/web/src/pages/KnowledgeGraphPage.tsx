@@ -117,7 +117,7 @@ export default function KnowledgeGraphPage() {
             <span className="ml-auto">{data.nodes.length} nodes · depth {maxDepth + 1}</span>
           </div>
 
-          <div className="mt-3 max-h-[70vh] w-full touch-pan-x touch-pan-y overflow-auto rounded-2xl border border-white/10 bg-white/[0.02]">
+          <div className="mt-3 max-h-[70vh] min-w-0 w-full touch-pan-x touch-pan-y overflow-auto rounded-2xl border border-white/10 bg-white/[0.02]">
             <svg width={width} height={height} className="block">
               {/* Edges (only between visible nodes) */}
               {data.nodes.map((n) => {

@@ -1,22 +1,62 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 const TTSPlayer = lazy(() => import("@/components/TTSPlayer"));
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { LogOut, Loader2 } from "lucide-react";
+import { LogOut, Loader2, X } from "lucide-react";
 import Logo from "@/components/Logo";
 import LoginScreen from "@/components/LoginScreen";
 import SyncButton from "@/components/SyncButton";
 import { DASHBOARD, MODULES } from "@/lib/modules";
 import { isAuthConfigured, signOutUser, useAuth } from "@/lib/auth";
 import { useAppData } from "@/lib/store";
+import { syncGithubNow } from "@/lib/githubSync";
+
+const APP_VERSION = "1.0.3";
+const GUIDE_SHOWN_KEY = "knowhub:guide-prompt-version";
 
 const navItems = [DASHBOARD, ...MODULES];
 
 export default function AppLayout() {
   const [open, setOpen] = useState(false);
+  const [guideBanner, setGuideBanner] = useState(false);
   const location = useLocation();
   const { loading, user } = useAuth();
   const data = useAppData();
   const githubConnected = Boolean(data.github?.token && data.github?.login);
+  const syncRef = useRef<() => void>(() => {});
+
+  // Keep syncRef current so event listeners always call the latest
+  useEffect(() => {
+    syncRef.current = () => {
+      if (githubConnected) syncGithubNow().catch(() => {});
+    };
+  }, [githubConnected]);
+
+  // Auto-sync every 5 minutes
+  useEffect(() => {
+    const id = setInterval(() => syncRef.current(), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Sync on tab/window close
+  useEffect(() => {
+    const handler = () => syncRef.current();
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // Show Guide prompt for first-time users or after an app update
+  useEffect(() => {
+    if (!user) return;
+    const seen = localStorage.getItem(GUIDE_SHOWN_KEY);
+    if (seen !== APP_VERSION) {
+      setGuideBanner(true);
+    }
+  }, [user]);
+
+  function dismissGuide() {
+    localStorage.setItem(GUIDE_SHOWN_KEY, APP_VERSION);
+    setGuideBanner(false);
+  }
 
   // When auth is configured, gate the app behind Google sign-in.
   if (isAuthConfigured && loading) {
@@ -100,7 +140,7 @@ export default function AppLayout() {
                 {user.displayName || user.email}
               </span>
               <button
-                onClick={() => signOutUser()}
+                onClick={() => { syncRef.current(); signOutUser(); }}
                 title="Sign out"
                 className="rounded p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
               >
@@ -116,6 +156,29 @@ export default function AppLayout() {
           {githubConnected && (
             <div className="mb-3 hidden justify-end lg:flex">
               <SyncButton />
+            </div>
+          )}
+          {/* Guide prompt banner */}
+          {guideBanner && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-brand-500/40 bg-brand-500/10 px-4 py-3 text-sm text-brand-100">
+              <span className="flex-1">
+                👋 Welcome to KnowHub! Check out the{" "}
+                <Link
+                  to="/app/guide"
+                  className="font-semibold underline hover:text-white"
+                  onClick={dismissGuide}
+                >
+                  KnowHub Guide
+                </Link>{" "}
+                to get started quickly.
+              </span>
+              <button
+                onClick={dismissGuide}
+                className="shrink-0 rounded p-0.5 text-brand-200 hover:text-white"
+                aria-label="Dismiss"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
           <div className="flex-1">
