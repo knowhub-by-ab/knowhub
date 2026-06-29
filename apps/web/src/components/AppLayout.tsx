@@ -50,13 +50,10 @@ export default function AppLayout() {
     if (!user) return;
     const alreadyShown = sessionStorage.getItem("knowhub:puter-prompt-shown");
     if (alreadyShown) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p = (window as any).puter;
-    const isConnected = p?.auth?.isSignedIn?.() ?? false;
-    if (!isConnected) {
+    if (!data.puterApiToken) {
       setShowPuterBanner(true);
     }
-  }, [user]);
+  }, [user, data.puterApiToken]);
 
   function dismissPuterBanner() {
     sessionStorage.setItem("knowhub:puter-prompt-shown", "1");
@@ -181,14 +178,14 @@ export default function AppLayout() {
           {showPuterBanner && (
             <div className="mb-4 flex items-center gap-3 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm">
               <span className="flex-1 text-violet-200">
-                <b>Connect Puter</b> (free) to enable MP3 audio download for your learning pages.
+                <b>Add your Puter API token</b> (free) in Settings to enable MP3 audio download for your learning pages.
               </span>
               <a
                 href="/app/settings"
                 onClick={dismissPuterBanner}
                 className="shrink-0 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500"
               >
-                Connect
+                Go to Settings
               </a>
               <button onClick={dismissPuterBanner} className="shrink-0 text-violet-400 hover:text-white">
                 <X className="h-4 w-4" />

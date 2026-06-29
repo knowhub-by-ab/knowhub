@@ -191,6 +191,8 @@ export interface AppData {
   videos: VideoRec[];
   /** Chat session folders. */
   chatFolders: ChatFolder[];
+  /** Puter API token for TTS/MP3 download (stored locally only, never synced). */
+  puterApiToken?: string;
 }
 
 export interface VideoRec {

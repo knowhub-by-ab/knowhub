@@ -108,15 +108,46 @@ function stopPoll() {
   if (_poll) { clearInterval(_poll); _poll = null; }
 }
 
+/**
+ * Async voice loader: resolves immediately if voices are already available,
+ * otherwise waits for the voiceschanged event (Android WebView loads them
+ * asynchronously). Falls back to an empty array after 2 s so speech still
+ * fires with the platform default voice.
+ */
+function getVoicesAsync(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    const voices = speechSynthesis.getVoices();
+    if (voices.length > 0) { resolve(voices); return; }
+    speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
+    setTimeout(() => resolve([]), 2000);
+  });
+}
+
 export function speak(text: string, opts?: { title?: string; rate?: number; voiceURI?: string }): void {
-  if (!isTTSSupported()) return;
+  if (!isTTSSupported()) {
+    // Surface a clear error rather than silently doing nothing
+    update({ active: false, playing: false, paused: false });
+    console.warn("[TTS] speechSynthesis is not available on this device/browser.");
+    return;
+  }
   window.speechSynthesis.cancel();
 
   _utt = new SpeechSynthesisUtterance(text);
   _utt.rate = opts?.rate ?? _state.rate;
 
+  // Resolve voices asynchronously so Android WebView (which loads them late)
+  // still picks the right voice instead of silently falling back to nothing.
+  const wantedURI = opts?.voiceURI ?? _state.voiceURI;
+  getVoicesAsync().then((voices) => {
+    if (!_utt) return; // speak() was cancelled before voices resolved
+    const voice = voices.find((v) => v.voiceURI === wantedURI) ?? null;
+    _utt.voice = voice; // null = platform default, which is fine
+  });
+
+  // Immediately proceed with speak() so there's no perceptible delay.
+  // The voice property can be set before the utterance is dequeued.
   const voices = window.speechSynthesis.getVoices();
-  const voice = voices.find((v) => v.voiceURI === (opts?.voiceURI ?? _state.voiceURI));
+  const voice = voices.find((v) => v.voiceURI === wantedURI);
   if (voice) _utt.voice = voice;
 
   _utt.onboundary = (e) => {

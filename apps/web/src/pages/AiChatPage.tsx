@@ -85,7 +85,7 @@ export default function AiChatPage() {
 
     if (pageContent.trim()) {
       // Pre-fill the input box so the user can edit or just hit Send
-      const openingMsg = `I want to discuss the learning page: **${pageTitle}**\n\nHere's the content:\n\n${pageContent.slice(0, 3000)}${pageContent.length > 3000 ? "\n\n*(content truncated for brevity)*" : ""}`;
+      const openingMsg = `I want to discuss the learning page: **${pageTitle}**\n\nHere's the content:\n\n${pageContent.slice(0, 3000)}`;
       setInput(openingMsg);
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps

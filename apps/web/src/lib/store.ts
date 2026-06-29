@@ -45,6 +45,7 @@ const DEFAULT_DATA: AppData = {
   highlights: [],
   videos: [],
   chatFolders: [],
+  puterApiToken: undefined,
 };
 
 function load(): AppData {
@@ -646,4 +647,9 @@ export function summarizeProgress(nodes: TreeNode[]): ProgressSummary {
   const pending = total - completed - inProgress;
   const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
   return { total, completed, inProgress, pending, percent };
+}
+
+/** Save (or clear) the Puter API token. Stored locally only — never synced. */
+export function setPuterApiToken(token: string) {
+  setState((prev) => ({ ...prev, puterApiToken: token.trim() || undefined }));
 }

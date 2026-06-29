@@ -1,4 +1,5 @@
 // Page export utilities: Markdown, DOC (Word-compatible HTML), PDF (print dialog), Audio (Puter TTS).
+import { getState } from "./store";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -94,16 +95,19 @@ export async function exportAudio(title: string, speakableText: string): Promise
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const p = (window as any).puter;
   if (!p?.ai?.txt2speech) {
-    alert(
-      "Puter is not loaded. Please refresh the page.\n\nPuter provides free AI text-to-speech — no account needed for basic use, or sign in at puter.com for higher limits."
-    );
+    alert("Puter is not loaded. Please refresh the page.");
     return;
   }
+
+  // Inject stored API token so Puter uses it instead of requiring browser login
+  const token = getState().puterApiToken;
+  if (!token) {
+    alert("Puter API token not set.\n\nGo to Settings → Puter and paste your API token.\nGet a free token at puter.com → Account → API Keys.");
+    return;
+  }
+  p.authToken = token;
+
   try {
-    // Sign in if not already authenticated (for higher quota)
-    if (p.auth?.isSignedIn && !p.auth.isSignedIn()) {
-      await p.auth.signIn();
-    }
     const audio = await p.ai.txt2speech(speakableText);
     const src: string = audio?.src ?? "";
     if (!src) throw new Error("No audio returned from Puter.");
@@ -112,10 +116,6 @@ export async function exportAudio(title: string, speakableText: string): Promise
     downloadBlob(blob, `${safeName(title)}.mp3`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("sign") || msg.includes("auth") || msg.includes("login")) {
-      alert("Please sign in to Puter first. Go to Settings → Puter and click Connect.");
-    } else {
-      alert(`Audio download failed: ${msg}\n\nTip: Make sure you are connected to Puter in Settings.`);
-    }
+    alert(`Audio download failed: ${msg}\n\nCheck your Puter API token in Settings → Puter.`);
   }
 }

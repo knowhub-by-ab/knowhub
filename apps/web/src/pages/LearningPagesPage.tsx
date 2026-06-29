@@ -195,6 +195,10 @@ export default function LearningPagesPage() {
   }
 
   function toggleTTS() {
+    if (!isTTSSupported()) {
+      alert("Text-to-speech is not supported in this browser or WebView. Try Chrome or Safari on a desktop.");
+      return;
+    }
     if (speaking || isSpeaking()) {
       stopTTS();
       setSpeaking(false);
@@ -514,17 +518,15 @@ export default function LearningPagesPage() {
                   <Copy className="h-3.5 w-3.5" />
                   {copied ? "Copied!" : "Copy"}
                 </button>
-                {isTTSSupported() && (
-                  <button
-                    onClick={toggleTTS}
-                    disabled={!draft.trim()}
-                    title={speaking ? "Stop listening" : "Listen to this page"}
-                    className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
-                  >
-                    {speaking ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
-                    {speaking ? "Stop" : "Listen"}
-                  </button>
-                )}
+                <button
+                  onClick={toggleTTS}
+                  disabled={!draft.trim()}
+                  title={speaking ? "Stop listening" : "Listen to this page"}
+                  className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+                >
+                  {speaking ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                  {speaking ? "Stop" : "Listen"}
+                </button>
                 <div className="relative">
                   <button
                     onClick={() => setShowDownload((v) => !v)}
