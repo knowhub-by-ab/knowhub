@@ -497,9 +497,9 @@ export default function LearningPagesPage() {
                 {selectedTitle}
               </div>
             </div>
-            {/* Action bar — scrolls horizontally on mobile */}
-            <div className="flex items-center gap-1.5 overflow-x-auto border-b border-white/10 px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex shrink-0 items-center gap-1.5">
+            {/* Action bar — wraps on mobile so dropdowns are not clipped */}
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-white/10 px-4 py-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {selectedNode && (
                   <button
                     onClick={() => tree.setStatus(selectedNode.id, nextStatus(selectedNode.status))}
