@@ -198,22 +198,77 @@ export async function generateTreeChanges(
 interface GenQuestion {
   prompt: string;
   options: string[];
-  correct: number[];
+  correct: number[] | string[];
   explanation?: string;
+}
+
+/** Normalise a single correct-answer value to a 0-based index.
+ *  Accepts: integer (0-3), letter "A"/"B"/"C"/"D" (case-insensitive), or numeric string.
+ *  Out-of-range values are clamped to the valid range rather than discarded. */
+function normaliseCorrectIndex(val: unknown, optionCount: number): number | null {
+  if (typeof val === "number" && Number.isInteger(val)) {
+    if (val < 0) return 0;
+    if (val >= optionCount) return optionCount - 1;
+    return val;
+  }
+  if (typeof val === "string") {
+    const upper = val.trim().toUpperCase();
+    const letterMap: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
+    if (upper in letterMap) {
+      const idx = letterMap[upper];
+      return idx < optionCount ? idx : optionCount - 1;
+    }
+    const n = parseInt(upper, 10);
+    if (!isNaN(n)) {
+      if (n < 0) return 0;
+      if (n >= optionCount) return optionCount - 1;
+      return n;
+    }
+  }
+  return null;
 }
 
 function parseGenQuestions(raw: GenQuestion[]): Question[] {
   return raw
     .filter((q) => q && q.prompt && Array.isArray(q.options) && q.options.length >= 2)
-    .map((q) => ({
-      id: quizzes.newQuestionId(),
-      prompt: String(q.prompt),
-      options: q.options.map((o) => String(o)),
-      correct: (Array.isArray(q.correct) ? q.correct : [])
-        .filter((i) => Number.isInteger(i) && i >= 0 && i < q.options.length),
-      explanation: q.explanation ? String(q.explanation) : undefined,
-    }))
+    .map((q) => {
+      const options = q.options.map((o) => String(o));
+      const rawCorrect = Array.isArray(q.correct) ? q.correct : [];
+      const correct = [...new Set(
+        rawCorrect
+          .map((v) => normaliseCorrectIndex(v, options.length))
+          .filter((i): i is number => i !== null)
+      )];
+      return {
+        id: quizzes.newQuestionId(),
+        prompt: String(q.prompt),
+        options,
+        correct,
+        explanation: q.explanation ? String(q.explanation) : undefined,
+      };
+    })
     .filter((q) => q.correct.length >= 1);
+}
+
+/** Parse a raw text response that should contain a JSON array of questions.
+ *  Tries strict JSON.parse first, then falls back to regex extraction. */
+function parseQuestionsFromText(text: string): GenQuestion[] {
+  const trimmed = text.trim();
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed as GenQuestion[];
+    if (parsed && Array.isArray((parsed as { questions?: GenQuestion[] }).questions)) {
+      return (parsed as { questions: GenQuestion[] }).questions;
+    }
+  } catch { /* fall through */ }
+  const match = trimmed.match(/\[[\s\S]*\]/);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed)) return parsed as GenQuestion[];
+    } catch { /* fall through */ }
+  }
+  return [];
 }
 
 /** Ask the AI for an MCQ quiz on `topic` and store it. Returns the quiz id. */
@@ -250,19 +305,27 @@ export async function generateQuizFromPages(
     .map((t, i) => `### ${t}\n${pageContents[i]?.slice(0, 1500) ?? ""}`)
     .join("\n\n");
   const messages: ChatMessage[] = [
-    { role: "system", content: "You output ONLY valid JSON. No prose, no code fences." },
+    {
+      role: "system",
+      content:
+        "Return ONLY a valid JSON array. No markdown, no code fences, no explanation. " +
+        "Start your response with [ and end with ]",
+    },
     {
       role: "user",
       content:
         `Based on the following learning page content, create a ${n}-question MCQ quiz. ` +
-        `Return JSON: {"title": string, "questions": [{"prompt": string, "options": [4 strings], ` +
-        `"correct": [0-based index/indices], "explanation": "one-line explanation"}]}.\n\n${context}`,
+        `Return a JSON array of question objects with this shape: ` +
+        `[{"prompt": string, "options": [4 strings], "correct": [0-based index/indices of correct option(s)], "explanation": "one-line explanation"}]. ` +
+        `Usually one correct option per question; occasionally two. Options must be plausible.\n\n${context}`,
     },
   ];
-  const data = await chatJSON<{ title?: string; questions?: GenQuestion[] }>(keys, messages, "assessments");
-  const questions = parseGenQuestions(data.questions ?? []);
+  // Use chatCompletion directly so we can apply both strict parse and regex fallback
+  const { content: rawText } = await chatCompletion(keys, messages, "assessments");
+  const rawQuestions = parseQuestionsFromText(rawText);
+  const questions = parseGenQuestions(rawQuestions);
   if (!questions.length) throw new Error("The AI returned no usable questions. Try again.");
-  const title = data.title?.trim() || `Quiz: ${pageTitles.slice(0, 2).join(", ")}`;
+  const title = `Quiz: ${pageTitles.slice(0, 2).join(", ")}`;
   return quizzes.add(title, questions).id;
 }
 

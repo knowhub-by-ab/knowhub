@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   FileText,
   Check,
@@ -17,6 +17,7 @@ import {
   Highlighter,
   X,
   ExternalLink,
+  MessagesSquare,
   PanelLeftOpen,
 } from "lucide-react";
 import { setPage, tree, highlights as highlightStore, useAppData } from "@/lib/store";
@@ -121,6 +122,7 @@ function PickerNode({
 
 export default function LearningPagesPage() {
   const data = useAppData();
+  const navigate = useNavigate();
   const roots = useMemo(() => tree.childrenOf(data.nodes, null), [data.nodes]);
   const flat = useMemo(() => tree.flatten(data.nodes), [data.nodes]);
   const [treePanelOpen, setTreePanelOpen] = useState(false);
@@ -384,12 +386,8 @@ export default function LearningPagesPage() {
         <>
         {/* Mobile tree panel overlay */}
         {treePanelOpen && (
-          <div
-            className="fixed inset-0 z-[60] bg-black/60 lg:hidden"
-            onClick={() => setTreePanelOpen(false)}
-          />
+          <div className="fixed inset-0 z-[60] bg-black/60 lg:hidden" onClick={() => setTreePanelOpen(false)} />
         )}
-
         <div className="mt-6 grid gap-4 lg:grid-cols-[280px_1fr]">
           {/* Tree picker panel — fixed drawer on mobile, sticky sidebar on desktop */}
           <aside className={`
@@ -397,16 +395,14 @@ export default function LearningPagesPage() {
             lg:static lg:z-auto lg:h-auto lg:w-auto lg:p-2
             flex flex-col min-w-0 rounded-none lg:rounded-2xl
             border-r lg:border border-white/10 bg-slate-950 lg:bg-white/[0.03]
-            lg:sticky lg:top-4 lg:self-start
+            lg:sticky lg:top-4 lg:self-start overflow-y-auto
             transition-transform duration-200
             ${treePanelOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
-          `} style={{ maxHeight: undefined }}>
-            {/* Mobile close button */}
+          `}>
+            {/* Mobile header row */}
             <div className="mb-2 flex items-center justify-between lg:hidden">
               <span className="text-xs font-semibold text-slate-300">Topics</span>
-              <button onClick={() => setTreePanelOpen(false)} className="rounded p-1 text-slate-400 hover:text-white">
-                <X className="h-4 w-4" />
-              </button>
+              <button onClick={() => setTreePanelOpen(false)} className="rounded p-1 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
             </div>
             {/* Batch generate toolbar */}
             <div className="mb-2 shrink-0 space-y-2 px-1">
@@ -454,7 +450,6 @@ export default function LearningPagesPage() {
           {/* Editor + AI */}
           <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03]">
             <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2">
-              {/* Mobile: show tree toggle */}
               <button
                 className="lg:hidden grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-white"
                 onClick={() => setTreePanelOpen(true)}
@@ -539,7 +534,14 @@ export default function LearningPagesPage() {
                     <ExternalLink className="h-3.5 w-3.5" /> Discuss ▾
                   </button>
                   {showDiscuss && (
-                    <div className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-lg border border-white/10 bg-slate-900 py-1 shadow-xl">
+                    <div className="absolute right-0 top-full z-20 mt-1 min-w-[170px] rounded-lg border border-white/10 bg-slate-900 py-1 shadow-xl">
+                      <button
+                        onClick={() => { navigate("/app/ai-chat"); setShowDiscuss(false); }}
+                        className="flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs text-brand-300 hover:bg-white/5"
+                      >
+                        <MessagesSquare className="h-3.5 w-3.5 shrink-0" />
+                        KnowHub AI Tutor
+                      </button>
                       {[
                         { label: "ChatGPT", action: () => discussPage(selectedTitle ?? "page", draft, "chatgpt") },
                         { label: "Gemini (copy prompt)", action: () => discussPage(selectedTitle ?? "page", draft, "gemini") },
