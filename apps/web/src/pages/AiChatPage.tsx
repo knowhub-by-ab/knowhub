@@ -116,21 +116,22 @@ export default function AiChatPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-5xl gap-4 relative">
+    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-5xl gap-4">
       {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-[60] bg-black/60 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      {/* Session rail — hidden on mobile, shown as overlay drawer when toggled */}
+      {/* Session rail — fixed drawer on mobile, inline on desktop */}
       <aside className={`
-        absolute lg:relative z-40 lg:z-auto
-        flex w-52 shrink-0 flex-col gap-1 rounded-2xl border border-white/10 bg-slate-950 lg:bg-white/[0.02] p-2
-        h-full lg:h-auto
+        fixed top-0 left-0 z-[70] h-full w-72 p-4
+        lg:static lg:z-auto lg:h-auto lg:w-52 lg:p-2
+        flex shrink-0 flex-col gap-1 rounded-none lg:rounded-2xl
+        border-r lg:border border-white/10 bg-slate-950 lg:bg-white/[0.02]
         transition-transform duration-200
-        ${sidebarOpen ? "translate-x-0" : "-translate-x-[110%]"} lg:translate-x-0
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
       `}>
         <button
           onClick={newSession}

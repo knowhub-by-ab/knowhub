@@ -17,6 +17,7 @@ import {
   Highlighter,
   X,
   ExternalLink,
+  PanelLeftOpen,
 } from "lucide-react";
 import { setPage, tree, highlights as highlightStore, useAppData } from "@/lib/store";
 import { selectionToHighlight, applyHighlights, HIGHLIGHT_CLASSES, type HighlightColor } from "@/lib/highlights";
@@ -122,6 +123,7 @@ export default function LearningPagesPage() {
   const data = useAppData();
   const roots = useMemo(() => tree.childrenOf(data.nodes, null), [data.nodes]);
   const flat = useMemo(() => tree.flatten(data.nodes), [data.nodes]);
+  const [treePanelOpen, setTreePanelOpen] = useState(false);
 
   const [params, setParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(flat[0]?.node.id ?? null);
@@ -379,9 +381,33 @@ export default function LearningPagesPage() {
           </p>
         </div>
       ) : (
+        <>
+        {/* Mobile tree panel overlay */}
+        {treePanelOpen && (
+          <div
+            className="fixed inset-0 z-[60] bg-black/60 lg:hidden"
+            onClick={() => setTreePanelOpen(false)}
+          />
+        )}
+
         <div className="mt-6 grid gap-4 lg:grid-cols-[280px_1fr]">
-          {/* Sticky tree picker panel */}
-          <aside className="lg:sticky lg:top-4 lg:self-start flex flex-col min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] p-2" style={{ maxHeight: "calc(100vh - 6rem)" }}>
+          {/* Tree picker panel — fixed drawer on mobile, sticky sidebar on desktop */}
+          <aside className={`
+            fixed top-0 left-0 z-[70] h-full w-80 p-3
+            lg:static lg:z-auto lg:h-auto lg:w-auto lg:p-2
+            flex flex-col min-w-0 rounded-none lg:rounded-2xl
+            border-r lg:border border-white/10 bg-slate-950 lg:bg-white/[0.03]
+            lg:sticky lg:top-4 lg:self-start
+            transition-transform duration-200
+            ${treePanelOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
+          `} style={{ maxHeight: undefined }}>
+            {/* Mobile close button */}
+            <div className="mb-2 flex items-center justify-between lg:hidden">
+              <span className="text-xs font-semibold text-slate-300">Topics</span>
+              <button onClick={() => setTreePanelOpen(false)} className="rounded p-1 text-slate-400 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
             {/* Batch generate toolbar */}
             <div className="mb-2 shrink-0 space-y-2 px-1">
               <div className="text-xs text-slate-500">
@@ -428,6 +454,14 @@ export default function LearningPagesPage() {
           {/* Editor + AI */}
           <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03]">
             <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2">
+              {/* Mobile: show tree toggle */}
+              <button
+                className="lg:hidden grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-white"
+                onClick={() => setTreePanelOpen(true)}
+                aria-label="Open topics"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
               <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">
                 {selectedTitle}
               </div>
@@ -681,6 +715,7 @@ export default function LearningPagesPage() {
             )}
           </section>
         </div>
+        </>
       )}
       <p className="mt-3 text-xs text-slate-500">
         Pages save automatically in your browser and sync to your account. Green dot = page has content.

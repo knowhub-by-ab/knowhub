@@ -23,35 +23,22 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
   if (remote) {
     const local = getState();
     // Additive merge: bring in anything from remote that local doesn't have
-    const mergedPages = { ...remote.pages, ...local.pages }; // local wins per page
-    const localNoteIds = new Set(local.notesList.map((n) => n.id));
-    const mergedNotes = [
-      ...local.notesList,
-      ...(remote.notesList ?? []).filter((n) => !localNoteIds.has(n.id)),
-    ];
-    const localQuizIds = new Set(local.quizzes.map((q) => q.id));
-    const mergedQuizzes = [
-      ...local.quizzes,
-      ...(remote.quizzes ?? []).filter((q) => !localQuizIds.has(q.id)),
-    ];
-    const localResourceIds = new Set(local.resources.map((r) => r.id));
-    const mergedResources = [
-      ...local.resources,
-      ...(remote.resources ?? []).filter((r) => !localResourceIds.has(r.id)),
-    ];
-    // For nodes, only bring in remote nodes that don't exist locally
-    const localNodeIds = new Set(local.nodes.map((n) => n.id));
-    const mergedNodes = [
-      ...local.nodes,
-      ...(remote.nodes ?? []).filter((n) => !localNodeIds.has(n.id)),
-    ];
+    function mergeById<T extends { id: string }>(localArr: T[], remoteArr: T[] | undefined): T[] {
+      const localIds = new Set(localArr.map((x) => x.id));
+      return [...localArr, ...(remoteArr ?? []).filter((x) => !localIds.has(x.id))];
+    }
     replaceAll({
       ...local,
-      nodes: mergedNodes,
-      pages: mergedPages,
-      notesList: mergedNotes,
-      quizzes: mergedQuizzes,
-      resources: mergedResources,
+      nodes: mergeById(local.nodes, remote.nodes),
+      pages: { ...remote.pages, ...local.pages }, // local wins per page
+      notesList: mergeById(local.notesList, remote.notesList),
+      quizzes: mergeById(local.quizzes, remote.quizzes),
+      resources: mergeById(local.resources, remote.resources),
+      flashcards: mergeById(local.flashcards, remote.flashcards),
+      questionBanks: mergeById(local.questionBanks, remote.questionBanks),
+      chatSessions: mergeById(local.chatSessions, remote.chatSessions),
+      videos: mergeById(local.videos, remote.videos),
+      highlights: mergeById(local.highlights, remote.highlights),
     });
     onProgress?.("Merge complete.");
   }

@@ -125,12 +125,15 @@ export function speak(text: string, opts?: { title?: string; rate?: number; voic
     update({ charIndex, progress });
   };
 
+  const thisUtt = _utt;
   _utt.onend = () => {
+    if (_utt !== thisUtt) return; // A newer speak() already took over — ignore
     update({ active: false, playing: false, paused: false, progress: 1 });
     stopPoll();
   };
 
   _utt.onerror = () => {
+    if (_utt !== thisUtt) return;
     update({ active: false, playing: false, paused: false });
     stopPoll();
   };

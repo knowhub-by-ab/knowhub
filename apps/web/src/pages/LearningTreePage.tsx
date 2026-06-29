@@ -15,6 +15,7 @@ import {
   ArrowDown,
   IndentIncrease,
   IndentDecrease,
+  FileText,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
 import { generateLearningTree, generateTreeChanges, improveTree } from "@/lib/aiActions";
@@ -45,7 +46,7 @@ function NodeRow({
   depth: number;
 }) {
   const children = tree.childrenOf(nodes, node.id);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.title);
   const [adding, setAdding] = useState(false);
@@ -222,6 +223,13 @@ function NodeRow({
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
+              <Link
+                to={`/app/learning-pages?id=${node.id}`}
+                className="rounded p-1 text-slate-400 hover:bg-white/10 hover:text-brand-300"
+                title="Go to Learning Page"
+              >
+                <FileText className="h-3.5 w-3.5" />
+              </Link>
             </div>
           </>
         )}
@@ -497,11 +505,13 @@ export default function LearningTreePage() {
             learning tree.
           </div>
         ) : (
-          <ul>
-            {roots.map((n) => (
-              <NodeRow key={n.id} node={n} nodes={data.nodes} depth={0} />
-            ))}
-          </ul>
+          <div className="overflow-x-auto">
+            <ul className="min-w-max">
+              {roots.map((n) => (
+                <NodeRow key={n.id} node={n} nodes={data.nodes} depth={0} />
+              ))}
+            </ul>
+          </div>
         )}
       </div>
       <p className="mt-3 text-xs text-slate-500">

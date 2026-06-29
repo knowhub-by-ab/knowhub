@@ -109,24 +109,34 @@ export async function getFileText(
 
 /** The portable snapshot stored in the repo (and used to restore). */
 export interface KnowHubExport {
-  version: 1;
+  version: 2;
   exportedAt: string;
   nodes: AppData["nodes"];
   pages: AppData["pages"];
   notesList: AppData["notesList"];
   resources: AppData["resources"];
   quizzes: AppData["quizzes"];
+  flashcards: AppData["flashcards"];
+  questionBanks: AppData["questionBanks"];
+  chatSessions: AppData["chatSessions"];
+  videos: AppData["videos"];
+  highlights: AppData["highlights"];
 }
 
 export function buildExport(data: AppData): KnowHubExport {
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     nodes: data.nodes,
     pages: data.pages,
     notesList: data.notesList,
     resources: data.resources,
     quizzes: data.quizzes,
+    flashcards: data.flashcards,
+    questionBanks: data.questionBanks,
+    chatSessions: data.chatSessions,
+    videos: data.videos,
+    highlights: data.highlights,
   };
 }
 
