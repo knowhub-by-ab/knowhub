@@ -72,24 +72,26 @@ let _puterAudio: HTMLAudioElement | null = null;
 // ---------------------------------------------------------------------------
 // Native Android TTS (Capacitor plugin — only used inside the APK)
 // ---------------------------------------------------------------------------
-// Android TextToSpeech.speak() is fire-and-forget: the Capacitor plugin's
-// Promise resolves immediately after queuing, not after completion.
-// We simulate progress with a character-count timer so the player stays
-// visible and the user can stop early.
 let _nativeTimer: ReturnType<typeof setInterval> | null = null;
 
 function clearNativeTimer() {
   if (_nativeTimer) { clearInterval(_nativeTimer); _nativeTimer = null; }
 }
 
-async function nativeSpeak(text: string, rate: number): Promise<void> {
-  const { TextToSpeech } = await import("@capacitor-community/text-to-speech");
-  // Fire the actual speech — do NOT await, it resolves before speech ends
-  TextToSpeech.speak({ text, lang: "en-US", rate, pitch: 1.0, volume: 1.0, category: "ambient" })
-    .catch(() => { clearNativeTimer(); update({ active: false, playing: false, paused: false }); });
+// Fire-and-forget: starts Android TTS and runs a progress timer.
+// NEVER clears state on error — caller sets state before calling this,
+// timer is the only thing that auto-clears it.
+function nativeSpeak(text: string, rate: number): void {
+  // Start plugin — swallow all errors so no catch path wipes player state
+  import("@capacitor-community/text-to-speech")
+    .then(({ TextToSpeech }) => {
+      TextToSpeech.speak({ text, lang: "en-US", rate, pitch: 1.0, volume: 1.0, category: "ambient" })
+        .catch((e: unknown) => console.warn("[TTS] native speak error:", e));
+    })
+    .catch((e: unknown) => console.warn("[TTS] plugin import error:", e));
 
-  // Estimate duration: ~130 wpm * rate, ~5 chars/word
-  const estimatedMs = Math.max(3000, (text.length / 5 / (130 * rate)) * 60000);
+  // Simulate progress: ~130 wpm * rate, ~5 chars/word
+  const estimatedMs = Math.max(4000, (text.length / 5 / (130 * rate)) * 60000);
   const startTime = Date.now();
   clearNativeTimer();
   _nativeTimer = setInterval(() => {
@@ -99,13 +101,12 @@ async function nativeSpeak(text: string, rate: number): Promise<void> {
   }, 500);
 }
 
-// nativeStop only kills audio + timer — callers manage state updates themselves
-async function nativeStop(): Promise<void> {
+// Stops native TTS and clears timer. Does NOT touch state — caller handles state.
+function nativeStop(): void {
   clearNativeTimer();
-  try {
-    const { TextToSpeech } = await import("@capacitor-community/text-to-speech");
-    await TextToSpeech.stop();
-  } catch { /* ignore */ }
+  import("@capacitor-community/text-to-speech")
+    .then(({ TextToSpeech }) => TextToSpeech.stop())
+    .catch(() => {});
 }
 
 function notify() {
@@ -174,16 +175,13 @@ function getVoicesAsync(): Promise<SpeechSynthesisVoice[]> {
 
 export function speak(text: string, opts?: { title?: string; rate?: number; voiceURI?: string }): void {
   if (isNative()) {
-    void nativeStop();
+    nativeStop(); // synchronous — clears timer, fires stop in background
     update({
       active: true, playing: true, paused: false,
       title: opts?.title ?? "", text, charIndex: 0, progress: 0,
       rate: opts?.rate ?? _state.rate, voiceURI: "",
     });
-    void nativeSpeak(text, opts?.rate ?? _state.rate).catch((err) => {
-      update({ active: false, playing: false, paused: false });
-      console.error("[TTS] Native speak error:", err);
-    });
+    nativeSpeak(text, opts?.rate ?? _state.rate); // synchronous — never throws, never clears state
     return;
   }
   if (!isTTSSupported()) {
@@ -247,7 +245,7 @@ export function speak(text: string, opts?: { title?: string; rate?: number; voic
 }
 
 export function pauseTTS(): void {
-  if (isNative()) { update({ playing: false, paused: false }); void nativeStop(); return; }
+  if (isNative()) { update({ playing: false, paused: false }); nativeStop(); return; }
   if (_puterAudio) { _puterAudio.pause(); update({ playing: false, paused: true }); return; }
   if (!isTTSSupported()) return;
   window.speechSynthesis.pause();
@@ -265,7 +263,7 @@ export function resumeTTS(): void {
 }
 
 export function stopTTS(): void {
-  if (isNative()) { update({ ...DEFAULT_STATE }); void nativeStop(); return; }
+  if (isNative()) { update({ ...DEFAULT_STATE }); nativeStop(); return; }
   if (_puterAudio) {
     _puterAudio.pause();
     _puterAudio.src = "";
