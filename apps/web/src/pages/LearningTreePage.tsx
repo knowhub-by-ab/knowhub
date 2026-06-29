@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronRight,
@@ -16,6 +16,7 @@ import {
   IndentIncrease,
   IndentDecrease,
   FileText,
+  Upload,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
 import { generateLearningTree, generateTreeChanges, improveTree } from "@/lib/aiActions";
@@ -290,6 +291,11 @@ export default function LearningTreePage() {
   const [genParent, setGenParent] = useState<string>("");
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [syllabusMode, setSyllabusMode] = useState(false);
+  const [syllabusText, setSyllabusText] = useState("");
+  const [syllabusLoading, setSyllabusLoading] = useState(false);
+  const [syllabusError, setSyllabusError] = useState<string | null>(null);
+  const syllabusFileRef = useRef<HTMLInputElement>(null);
   const [treeMode, setTreeMode] = useState<"A" | "B">("A");
   const [treeModeB, setTreeModeB] = useState({ startLevel: "Beginner", topLevel: "Expert", style: "Normal explanation" });
   const LEVELS = ["Absolute Novice", "Beginner", "Intermediate", "Expert", "Advanced", "Professional", "Industry Standards"];
@@ -327,6 +333,32 @@ export default function LearningTreePage() {
       setGenError(err instanceof Error ? err.message : "Generation failed.");
     } finally {
       setGenLoading(false);
+    }
+  }
+
+  async function handleSyllabusFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setSyllabusText(text.slice(0, 12000));
+    } catch {
+      setSyllabusError("Could not read file. Try pasting the text instead.");
+    }
+    e.target.value = "";
+  }
+
+  async function generateFromSyllabus() {
+    if (!syllabusText.trim() || syllabusLoading) return;
+    setSyllabusError(null);
+    setSyllabusLoading(true);
+    try {
+      const instruction = `Generate a comprehensive learning tree based on this syllabus/curriculum:\n\n${syllabusText}\n\nCreate a structured hierarchy of topics and subtopics covering all subjects in this syllabus.`;
+      await generateLearningTree(data.aiKeys, instruction);
+    } catch (err) {
+      setSyllabusError(err instanceof Error ? err.message : "Generation failed.");
+    } finally {
+      setSyllabusLoading(false);
     }
   }
 
@@ -487,6 +519,56 @@ export default function LearningTreePage() {
             </Link>{" "}
             to use AI generation.
           </p>
+        )}
+      </div>
+
+      {/* Generate from Syllabus */}
+      <div className="mb-4 mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <button
+          onClick={() => setSyllabusMode((v) => !v)}
+          className="flex w-full items-center gap-2 text-left text-sm font-medium text-slate-300 hover:text-white"
+        >
+          <Upload className="h-4 w-4 text-brand-400" />
+          Generate tree from syllabus / document
+          <ChevronRight className={`ml-auto h-4 w-4 transition-transform ${syllabusMode ? "rotate-90" : ""}`} />
+        </button>
+        {syllabusMode && (
+          <div className="mt-3 space-y-2">
+            <textarea
+              value={syllabusText}
+              onChange={(e) => setSyllabusText(e.target.value)}
+              placeholder="Paste your syllabus, curriculum, or course outline here…"
+              rows={5}
+              className="w-full resize-none rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => syllabusFileRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5"
+              >
+                <Upload className="h-3.5 w-3.5" /> Upload file (.txt, .md, .pdf, .docx)
+              </button>
+              <input
+                ref={syllabusFileRef}
+                type="file"
+                accept=".txt,.md,.text,.pdf,.docx,.doc"
+                className="hidden"
+                onChange={handleSyllabusFile}
+              />
+              <button
+                onClick={generateFromSyllabus}
+                disabled={!syllabusText.trim() || syllabusLoading}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-40"
+              >
+                {syllabusLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {syllabusLoading ? "Generating…" : "Generate tree"}
+              </button>
+            </div>
+            {syllabusError && <p className="text-xs text-rose-300">{syllabusError}</p>}
+            <p className="text-xs text-slate-500">
+              Works best with plain text or Markdown. PDF/DOCX text extraction is basic (plain text only).
+            </p>
+          </div>
         )}
       </div>
 

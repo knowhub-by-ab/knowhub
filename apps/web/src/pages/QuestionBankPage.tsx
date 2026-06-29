@@ -27,6 +27,7 @@ export default function QuestionBankPage() {
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [downloadOpen, setDownloadOpen] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const pagesWithContent = data.nodes.filter((n) => data.pages[n.id]?.trim());
@@ -74,7 +75,7 @@ export default function QuestionBankPage() {
     }
   }
 
-  function exportBank(id: string) {
+  function exportBankMd(id: string) {
     const bank = data.questionBanks.find((b) => b.id === id);
     if (!bank) return;
     const md = `# ${bank.title}\n\nSource: ${bank.source}\n\n${bank.questions
@@ -84,6 +85,65 @@ export default function QuestionBankPage() {
       )
       .join("\n\n---\n\n")}`;
     exportMarkdown(bank.title, md);
+  }
+
+  function exportBankDoc(id: string, mode: "solved" | "solved-explained" | "unsolved") {
+    const bank = data.questionBanks.find((b) => b.id === id);
+    if (!bank) return;
+
+    const questionsHtml = bank.questions.map((q, i) => {
+      const optionsHtml = q.options.map((opt, oi) => {
+        const isCorrect = q.correct.includes(oi);
+        const showAnswer = mode !== "unsolved";
+        const mark = showAnswer && isCorrect ? " ✓" : "";
+        const style = showAnswer && isCorrect ? ' style="color:#16a34a;font-weight:bold"' : '';
+        return `<li${style}>${opt}${mark}</li>`;
+      }).join("\n");
+
+      const explanationHtml = (mode === "solved-explained" && q.explanation)
+        ? `<p style="color:#4f46e5;font-style:italic;margin-top:4px">💡 ${q.explanation}</p>`
+        : "";
+
+      return `<div style="margin-bottom:16px">
+<p><strong>Q${i + 1}. ${q.prompt}</strong></p>
+<ol type="A">${optionsHtml}</ol>
+${explanationHtml}
+</div>`;
+    }).join("\n<hr style='border:none;border-top:1px solid #eee;margin:8px 0'>\n");
+
+    const answerKeyHtml = mode === "unsolved"
+      ? `<h2>Answer Key</h2>
+<table style="border-collapse:collapse;width:100%">
+<thead><tr><th style="border:1px solid #ccc;padding:4px 8px">Q#</th><th style="border:1px solid #ccc;padding:4px 8px">Answer(s)</th>${bank.questions[0]?.explanation !== undefined ? '<th style="border:1px solid #ccc;padding:4px 8px">Explanation</th>' : ""}</tr></thead>
+<tbody>${bank.questions.map((q, i) => {
+        const letters = q.correct.map((c) => String.fromCharCode(65 + c)).join(", ");
+        const expCell = q.explanation ? `<td style="border:1px solid #ccc;padding:4px 8px">${q.explanation}</td>` : "";
+        return `<tr><td style="border:1px solid #ccc;padding:4px 8px">${i + 1}</td><td style="border:1px solid #ccc;padding:4px 8px">${letters}</td>${expCell}</tr>`;
+      }).join("")}</tbody></table>`
+      : "";
+
+    const modeLabel = mode === "solved" ? "Solved" : mode === "solved-explained" ? "Solved with Explanations" : "Unsolved";
+    const html = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8"><title>${bank.title}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.5;margin:2cm}h1,h2{color:#1a1a1a}ol{padding-left:1.5em}</style>
+</head><body>
+<h1>${bank.title}</h1>
+<p style="color:#666;font-size:10pt">Source: ${bank.source} · ${bank.questions.length} questions · ${modeLabel}</p>
+<hr>
+${questionsHtml}
+${answerKeyHtml}
+</body></html>`;
+
+    const safeName = (s: string) => s.trim().replace(/[^\w.-]+/g, "-").slice(0, 60) || "bank";
+    const blob = new Blob(["﻿", html], { type: "application/msword; charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeName(bank.title)}-${mode}.doc`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
   return (
@@ -208,13 +268,33 @@ export default function QuestionBankPage() {
                   <span className="truncate font-medium text-white">{bank.title}</span>
                   <span className="text-xs text-slate-500">{bank.questions.length} questions</span>
                 </button>
-                <button
-                  onClick={() => exportBank(bank.id)}
-                  title="Export as Markdown"
-                  className="rounded p-1.5 text-slate-400 hover:text-brand-300"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setDownloadOpen(downloadOpen === bank.id ? null : bank.id)}
+                    title="Download options"
+                    className="rounded p-1.5 text-slate-400 hover:text-brand-300"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                  {downloadOpen === bank.id && (
+                    <div className="absolute right-0 top-full z-20 mt-1 min-w-[220px] rounded-lg border border-white/10 bg-slate-900 py-1 shadow-xl">
+                      {[
+                        { label: "Markdown (.md)", action: () => exportBankMd(bank.id) },
+                        { label: "Word — Solved (answers shown)", action: () => exportBankDoc(bank.id, "solved") },
+                        { label: "Word — Solved + Explanations", action: () => exportBankDoc(bank.id, "solved-explained") },
+                        { label: "Word — Unsolved (answer key at end)", action: () => exportBankDoc(bank.id, "unsolved") },
+                      ].map((opt) => (
+                        <button
+                          key={opt.label}
+                          onClick={() => { opt.action(); setDownloadOpen(null); }}
+                          className="block w-full px-4 py-1.5 text-left text-xs text-slate-200 hover:bg-white/5"
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={() => questionBanks.remove(bank.id)}
                   className="rounded p-1.5 text-slate-400 hover:text-rose-400"

@@ -17,6 +17,7 @@ import {
   Highlighter,
   MessagesSquare,
   Volume2,
+  Mic,
   type LucideIcon,
 } from "lucide-react";
 
@@ -94,8 +95,23 @@ const STEPS: Step[] = [
     tag: "TTS",
   },
   {
+    icon: Mic,
+    title: "6. Listen to the Podcast",
+    body: (
+      <>
+        The <b>Podcast</b> page turns your Learning Pages into a listenable playlist. Tree
+        roots are shown collapsed — tap to expand a section and see its episodes. Each episode
+        shows its estimated reading time and your listen progress. Press <b>Play</b> (or{" "}
+        <b>Resume</b> if you've started before) to begin. The now-playing banner gives you{" "}
+        <b>Prev / Next</b> controls to move between episodes without going back to the list.
+      </>
+    ),
+    to: "/app/podcast",
+    tag: "Podcast",
+  },
+  {
     icon: ClipboardCheck,
-    title: "6. Test yourself with Assessments",
+    title: "7. Test yourself with Assessments",
     body: (
       <>
         In <b>Assessments</b>, generate a multiple-choice quiz by topic or from a specific
@@ -108,7 +124,7 @@ const STEPS: Step[] = [
   },
   {
     icon: BookOpen,
-    title: "7. Build Question Banks",
+    title: "8. Build Question Banks",
     body: (
       <>
         In <b>Question Bank</b>, generate a bank of 10–50 questions from a Learning Page, pasted
@@ -120,7 +136,7 @@ const STEPS: Step[] = [
   },
   {
     icon: Layers,
-    title: "8. Review with Flashcards",
+    title: "9. Review with Flashcards",
     body: (
       <>
         In <b>Flashcards</b>, pick a Learning Page and generate a flashcard deck. Review in
@@ -132,7 +148,7 @@ const STEPS: Step[] = [
   },
   {
     icon: Youtube,
-    title: "9. Find YouTube videos",
+    title: "10. Find YouTube videos",
     body: (
       <>
         In <b>Videos</b>, enter a topic or select a Learning Page and AI suggests relevant
@@ -145,7 +161,7 @@ const STEPS: Step[] = [
   },
   {
     icon: Highlighter,
-    title: "10. Highlight and annotate",
+    title: "11. Highlight and annotate",
     body: (
       <>
         In the <b>Learning Pages preview</b>, select any text to reveal a mini color toolbar —
@@ -157,7 +173,7 @@ const STEPS: Step[] = [
   },
   {
     icon: TrendingUp,
-    title: "11. Track your progress",
+    title: "12. Track your progress",
     body: (
       <>
         The <b>Progress</b> page shows overall completion percentage, a per-topic breakdown,
@@ -169,7 +185,7 @@ const STEPS: Step[] = [
   },
   {
     icon: MessagesSquare,
-    title: "12. Chat with the AI Tutor",
+    title: "13. Chat with the AI Tutor",
     body: (
       <>
         The <b>AI Tutor</b> is context-aware — it knows your learning tree and existing pages.
@@ -181,7 +197,7 @@ const STEPS: Step[] = [
   },
   {
     icon: Search,
-    title: "13. Search everything",
+    title: "14. Search everything",
     body: (
       <>
         Use <b>Search</b> to instantly find topics, pages, notes, and resources as you type.
@@ -191,7 +207,7 @@ const STEPS: Step[] = [
   },
   {
     icon: StickyNote,
-    title: "14. Notes & Resources",
+    title: "15. Notes & Resources",
     body: (
       <>
         Jot anything in your global <b>Notes</b> notebook (multiple titled notes, Markdown). Save
@@ -203,7 +219,7 @@ const STEPS: Step[] = [
   },
   {
     icon: GitBranch,
-    title: "15. Back up to GitHub",
+    title: "16. Back up to GitHub",
     body: (
       <>
         In <b>Repository</b>, connect your GitHub account and press <b>Sync to GitHub</b> to
@@ -216,7 +232,7 @@ const STEPS: Step[] = [
   },
   {
     icon: Smartphone,
-    title: "16. Use it on Android",
+    title: "17. Use it on Android",
     body: (
       <>
         Download the Android app from the "Download Android App" button on the home page or from
@@ -229,6 +245,7 @@ const STEPS: Step[] = [
 
 const TAG_COLORS: Record<string, string> = {
   TTS: "bg-violet-500/20 text-violet-300 ring-violet-500/30",
+  Podcast: "bg-brand-500/20 text-brand-300 ring-brand-500/30",
 };
 
 export default function GuidePage() {

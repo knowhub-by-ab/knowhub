@@ -138,9 +138,16 @@ export interface Highlight {
   createdAt: number;
 }
 
+export interface ChatFolder {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
 export interface ChatSession {
   id: string;
   title: string;
+  folderId?: string;
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
@@ -182,6 +189,8 @@ export interface AppData {
   highlights: Highlight[];
   /** YouTube video recommendations. */
   videos: VideoRec[];
+  /** Chat session folders. */
+  chatFolders: ChatFolder[];
 }
 
 export interface VideoRec {

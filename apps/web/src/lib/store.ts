@@ -15,6 +15,7 @@ import type {
   Note,
   ChatSession,
   ChatMessage,
+  ChatFolder,
   QuestionBank,
   Flashcard,
   Highlight,
@@ -43,6 +44,7 @@ const DEFAULT_DATA: AppData = {
   flashcards: [],
   highlights: [],
   videos: [],
+  chatFolders: [],
 };
 
 function load(): AppData {
@@ -89,6 +91,7 @@ function load(): AppData {
       flashcards: parsed.flashcards ?? [],
       highlights: parsed.highlights ?? [],
       videos: parsed.videos ?? [],
+      chatFolders: parsed.chatFolders ?? [],
     };
   } catch {
     return structuredClone(DEFAULT_DATA);
@@ -190,6 +193,7 @@ function merged(next: Partial<AppData>): AppData {
     flashcards: next.flashcards ?? [],
     highlights: next.highlights ?? [],
     videos: next.videos ?? [],
+    chatFolders: next.chatFolders ?? [],
   };
 }
 
@@ -483,6 +487,37 @@ export const chatSessions = {
     setState((prev) => ({
       ...prev,
       chatSessions: prev.chatSessions.filter((s) => s.id !== id),
+    }));
+  },
+  setFolder(sessionId: string, folderId: string | undefined) {
+    setState((prev) => ({
+      ...prev,
+      chatSessions: prev.chatSessions.map((s) =>
+        s.id === sessionId ? { ...s, folderId, updatedAt: Date.now() } : s
+      ),
+    }));
+  },
+};
+
+// --- Chat folders -----------------------------------------------------------
+
+export const chatFolders = {
+  create(name: string): ChatFolder {
+    const f: ChatFolder = { id: uid(), name: name.trim() || "New folder", createdAt: Date.now() };
+    setState((prev) => ({ ...prev, chatFolders: [...prev.chatFolders, f] }));
+    return f;
+  },
+  rename(id: string, name: string) {
+    setState((prev) => ({
+      ...prev,
+      chatFolders: prev.chatFolders.map((f) => f.id === id ? { ...f, name: name.trim() || "Folder" } : f),
+    }));
+  },
+  remove(id: string) {
+    setState((prev) => ({
+      ...prev,
+      chatFolders: prev.chatFolders.filter((f) => f.id !== id),
+      chatSessions: prev.chatSessions.map((s) => s.folderId === id ? { ...s, folderId: undefined } : s),
     }));
   },
 };

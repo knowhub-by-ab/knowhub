@@ -19,6 +19,7 @@ import {
   ExternalLink,
   MessagesSquare,
   PanelLeftOpen,
+  Youtube,
 } from "lucide-react";
 import { setPage, tree, highlights as highlightStore, useAppData } from "@/lib/store";
 import { selectionToHighlight, applyHighlights, HIGHLIGHT_CLASSES, type HighlightColor } from "@/lib/highlights";
@@ -27,7 +28,7 @@ import { renderMermaidIn } from "@/lib/mermaid";
 import { generatePageContent } from "@/lib/aiActions";
 import { STATUS_LABELS, STATUS_CYCLE, type NodeStatus, type TreeNode } from "@/lib/types";
 import { speak, stopTTS, isSpeaking, isTTSSupported, markdownToSpeakable } from "@/lib/tts";
-import { exportMarkdown, exportDoc, exportPdf } from "@/lib/exporters";
+import { exportMarkdown, exportDoc, exportPdf, exportAudio } from "@/lib/exporters";
 import { discussPage } from "@/lib/external";
 
 type Tab = "edit" | "preview";
@@ -457,7 +458,7 @@ export default function LearningPagesPage() {
             </div>
             {batch.error && <p className="shrink-0 px-1 pb-1 text-xs text-rose-300">{batch.error}</p>}
             {/* Scrollable tree list — fills remaining height of sticky panel */}
-            <ul className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scroll-smooth">
+            <ul className="flex-1 overflow-y-auto overflow-x-auto min-h-0 scroll-smooth">
               {roots.map((n) => (
                 <PickerNode
                   key={n.id}
@@ -538,7 +539,8 @@ export default function LearningPagesPage() {
                       {[
                         { label: "Markdown (.md)", action: () => exportMarkdown(selectedTitle ?? "page", draft) },
                         { label: "Word (.doc)", action: () => exportDoc(selectedTitle ?? "page", previewHtml) },
-                        { label: "PDF (print)", action: () => exportPdf(selectedTitle ?? "page") },
+                        { label: "PDF (print)", action: () => exportPdf(selectedTitle ?? "page", previewHtml) },
+                        { label: "Audio (.mp3, via Puter)", action: () => exportAudio(selectedTitle ?? "page", markdownToSpeakable(draft)) },
                       ].map((opt) => (
                         <button
                           key={opt.label}
@@ -551,6 +553,16 @@ export default function LearningPagesPage() {
                     </div>
                   )}
                 </div>
+                <button
+                  onClick={() => {
+                    if (selectedId) navigate(`/app/videos?pageId=${selectedId}&autoFetch=1`);
+                  }}
+                  disabled={!selectedId}
+                  title="Find YouTube videos for this page"
+                  className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/5 disabled:opacity-40"
+                >
+                  <Youtube className="h-3.5 w-3.5" /> Videos
+                </button>
                 <div className="relative">
                   <button
                     onClick={() => { setShowDiscuss((v) => !v); setShowDownload(false); }}
@@ -563,7 +575,7 @@ export default function LearningPagesPage() {
                   {showDiscuss && (
                     <div className="absolute right-0 top-full z-20 mt-1 min-w-[170px] rounded-lg border border-white/10 bg-slate-900 py-1 shadow-xl">
                       <button
-                        onClick={() => { navigate("/app/ai-chat"); setShowDiscuss(false); }}
+                        onClick={() => { navigate(`/app/ai-chat?newChat=1&pageId=${selectedId ?? ""}`); setShowDiscuss(false); }}
                         className="flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs text-brand-300 hover:bg-white/5"
                       >
                         <MessagesSquare className="h-3.5 w-3.5 shrink-0" />
