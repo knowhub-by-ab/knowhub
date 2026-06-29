@@ -72,14 +72,35 @@ let _puterAudio: HTMLAudioElement | null = null;
 // ---------------------------------------------------------------------------
 // Native Android TTS (Capacitor plugin — only used inside the APK)
 // ---------------------------------------------------------------------------
+// Android TextToSpeech.speak() is fire-and-forget: the Capacitor plugin's
+// Promise resolves immediately after queuing, not after completion.
+// We simulate progress with a character-count timer so the player stays
+// visible and the user can stop early.
+let _nativeTimer: ReturnType<typeof setInterval> | null = null;
+
+function clearNativeTimer() {
+  if (_nativeTimer) { clearInterval(_nativeTimer); _nativeTimer = null; }
+}
+
 async function nativeSpeak(text: string, rate: number): Promise<void> {
   const { TextToSpeech } = await import("@capacitor-community/text-to-speech");
-  // speak() resolves when the utterance finishes
-  await TextToSpeech.speak({ text, lang: "en-US", rate, pitch: 1.0, volume: 1.0, category: "ambient" });
-  update({ ...DEFAULT_STATE });
+  // Fire the actual speech — do NOT await, it resolves before speech ends
+  TextToSpeech.speak({ text, lang: "en-US", rate, pitch: 1.0, volume: 1.0, category: "ambient" })
+    .catch(() => { clearNativeTimer(); update({ active: false, playing: false, paused: false }); });
+
+  // Estimate duration: ~130 wpm * rate, ~5 chars/word
+  const estimatedMs = Math.max(3000, (text.length / 5 / (130 * rate)) * 60000);
+  const startTime = Date.now();
+  clearNativeTimer();
+  _nativeTimer = setInterval(() => {
+    const progress = Math.min(1, (Date.now() - startTime) / estimatedMs);
+    update({ progress });
+    if (progress >= 1) { clearNativeTimer(); update({ ...DEFAULT_STATE }); }
+  }, 500);
 }
 
 async function nativeStop(): Promise<void> {
+  clearNativeTimer();
   try {
     const { TextToSpeech } = await import("@capacitor-community/text-to-speech");
     await TextToSpeech.stop();
