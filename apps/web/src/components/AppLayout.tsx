@@ -44,6 +44,25 @@ export default function AppLayout() {
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
+  const [showPuterBanner, setShowPuterBanner] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const alreadyShown = sessionStorage.getItem("knowhub:puter-prompt-shown");
+    if (alreadyShown) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = (window as any).puter;
+    const isConnected = p?.auth?.isSignedIn?.() ?? false;
+    if (!isConnected) {
+      setShowPuterBanner(true);
+    }
+  }, [user]);
+
+  function dismissPuterBanner() {
+    sessionStorage.setItem("knowhub:puter-prompt-shown", "1");
+    setShowPuterBanner(false);
+  }
+
   // Show Guide prompt for first-time users or after an app update
   useEffect(() => {
     if (!user) return;
@@ -156,6 +175,24 @@ export default function AppLayout() {
           {githubConnected && (
             <div className="mb-3 hidden justify-end lg:flex">
               <SyncButton />
+            </div>
+          )}
+          {/* Puter connection banner */}
+          {showPuterBanner && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm">
+              <span className="flex-1 text-violet-200">
+                <b>Connect Puter</b> (free) to enable MP3 audio download for your learning pages.
+              </span>
+              <a
+                href="/app/settings"
+                onClick={dismissPuterBanner}
+                className="shrink-0 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500"
+              >
+                Connect
+              </a>
+              <button onClick={dismissPuterBanner} className="shrink-0 text-violet-400 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
           {/* Guide prompt banner */}

@@ -3,6 +3,8 @@ import { Mic, Play, Square, Clock, ChevronRight, ChevronDown, SkipBack, SkipForw
 import { useAppData } from "@/lib/store";
 import { speak, stopTTS, subscribeToTTS, getTTSState, markdownToSpeakable } from "@/lib/tts";
 import type { TreeNode } from "@/lib/types";
+import { setPodcastEpisodes, setPodcastCurrentIdx, clearPodcast } from "@/lib/podcastStore";
+import type { PodcastEpisode } from "@/lib/podcastStore";
 
 // localStorage helpers
 const POS_KEY = "knowhub:podcast:pos";
@@ -62,15 +64,31 @@ export default function PodcastPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [playingId, ttsState.active]);
 
+  function buildEpList(): PodcastEpisode[] {
+    return allOrdered.map((n) => ({
+      id: n.id,
+      title: n.title,
+      text: markdownToSpeakable(data.pages[n.id] ?? ""),
+    }));
+  }
+
   function playEpisode(id: string, title: string) {
     const body = data.pages[id] ?? "";
+    const text = markdownToSpeakable(body);
     setPlayingId(id);
-    speak(markdownToSpeakable(body), { title });
+
+    // Register episode list for TTSPlayer navigation
+    const epList = buildEpList();
+    const idx = epList.findIndex((e) => e.id === id);
+    setPodcastEpisodes(epList, idx);
+
+    speak(text, { title });
   }
 
   function stopEpisode() {
     stopTTS();
     setPlayingId(null);
+    clearPodcast();
   }
 
   function toggleRoot(id: string) {
@@ -86,7 +104,10 @@ export default function PodcastPage() {
 
   function playAdjacentEpisode(delta: number) {
     const next = allOrdered[playingIdx + delta];
-    if (next) playEpisode(next.id, next.title);
+    if (next) {
+      setPodcastCurrentIdx(playingIdx + delta);
+      playEpisode(next.id, next.title);
+    }
   }
 
   const isPlaying = ttsState.active && ttsState.playing;
@@ -229,7 +250,19 @@ export default function PodcastPage() {
                           </span>
                         ) : (
                           <button
-                            onClick={() => { if (isPlaying) stopTTS(); playEpisode(node.id, node.title); }}
+                            onClick={() => {
+                              if (isPlaying) stopTTS();
+                              const body = data.pages[node.id] ?? "";
+                              const fullText = markdownToSpeakable(body);
+                              const savedPos = positions[node.id] ?? 0;
+                              const startChar = savedPos > 0.05 ? Math.floor(savedPos * fullText.length) : 0;
+                              const textToSpeak = startChar > 0 ? fullText.slice(startChar) : fullText;
+                              setPlayingId(node.id);
+                              const epList = buildEpList();
+                              const idx = epList.findIndex((e) => e.id === node.id);
+                              setPodcastEpisodes(epList, idx);
+                              speak(textToSpeak, { title: node.title });
+                            }}
                             className="shrink-0 flex items-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-xs font-medium text-brand-300 hover:bg-brand-500/20 transition"
                             title={hasProgress ? `Resume: ${node.title}` : `Play: ${node.title}`}
                           >

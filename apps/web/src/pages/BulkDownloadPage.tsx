@@ -13,12 +13,13 @@ import { useAppData, tree } from "@/lib/store";
 import { renderMarkdown } from "@/lib/markdown";
 import type { TreeNode } from "@/lib/types";
 
-type Format = "md" | "doc" | "html";
+type Format = "md" | "doc" | "html" | "pdf";
 
 const FORMAT_LABELS: Record<Format, string> = {
   md: "Markdown (.md)",
   doc: "Word (.doc)",
   html: "HTML (.html)",
+  pdf: "Print-ready HTML (.html) — open & print as PDF",
 };
 
 function safeName(s: string) {
@@ -146,6 +147,30 @@ export default function BulkDownloadPage() {
         } else if (format === "doc") {
           const doc = buildDocHtml(node.title, renderMarkdown(markdown));
           zip.file(`${prefix}${name}.doc`, "﻿" + doc);
+        } else if (format === "pdf") {
+          const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${node.title}</title>
+  <style>
+    body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.6; margin: 2cm; color: #111; }
+    h1,h2,h3,h4 { color: #1a1a1a; }
+    pre,code { font-family: Consolas, monospace; background: #f4f4f4; padding: 2px 5px; }
+    pre { padding: 10px; display: block; white-space: pre-wrap; }
+    table { border-collapse: collapse; width: 100%; }
+    td,th { border: 1px solid #ccc; padding: 6px 10px; }
+    img { max-width: 100%; }
+    blockquote { border-left: 3px solid #ccc; padding-left: 1em; color: #555; }
+    @media print { body { margin: 1cm; } }
+  </style>
+</head>
+<body>
+<h1>${node.title}</h1>
+${renderMarkdown(markdown)}
+</body>
+</html>`;
+          zip.file(`${name}-print.html`, html);
         }
       }
 
@@ -240,6 +265,11 @@ export default function BulkDownloadPage() {
                 </label>
               ))}
             </div>
+            {format === "pdf" && (
+              <p className="mt-2 text-xs text-slate-500">
+                Open each .html file in a browser and use File → Print → Save as PDF.
+              </p>
+            )}
           </div>
 
           <button

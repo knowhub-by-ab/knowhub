@@ -121,6 +121,7 @@ export interface KnowHubExport {
   chatSessions: AppData["chatSessions"];
   videos: AppData["videos"];
   highlights: AppData["highlights"];
+  chatFolders: AppData["chatFolders"];
 }
 
 export function buildExport(data: AppData): KnowHubExport {
@@ -137,6 +138,7 @@ export function buildExport(data: AppData): KnowHubExport {
     chatSessions: data.chatSessions,
     videos: data.videos,
     highlights: data.highlights,
+    chatFolders: data.chatFolders,
   };
 }
 

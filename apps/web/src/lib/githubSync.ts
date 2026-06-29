@@ -39,6 +39,7 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
       chatSessions: mergeById(local.chatSessions, remote.chatSessions),
       videos: mergeById(local.videos, remote.videos),
       highlights: mergeById(local.highlights, remote.highlights),
+      chatFolders: mergeById(local.chatFolders ?? [], remote.chatFolders ?? []),
     });
     onProgress?.("Merge complete.");
   }

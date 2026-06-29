@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Youtube,
   Sparkles,
@@ -22,6 +22,7 @@ function formatDuration(sec: number) {
 
 export default function VideosPage() {
   const data = useAppData();
+  const [searchParams] = useSearchParams();
   const [topic, setTopic] = useState("");
   const [selectedPageId, setSelectedPageId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,6 +32,40 @@ export default function VideosPage() {
   const pagesWithContent = data.nodes.filter((n) => data.pages[n.id]?.trim());
   const keptVideos = data.videos.filter((v) => v.kept);
   const pendingVideos = data.videos.filter((v) => !v.kept);
+
+  useEffect(() => {
+    const pid = searchParams.get("pageId");
+    const auto = searchParams.get("autoFetch") === "1";
+    if (pid && data.nodes.some((n) => n.id === pid)) {
+      setSelectedPageId(pid);
+      if (auto) {
+        const hasVideos = data.videos.some((v) => v.pageId === pid && v.kept);
+        if (!hasVideos) {
+          // auto-trigger suggest after a short delay to let state settle
+          setTimeout(() => suggestForPage(pid), 300);
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function suggestForPage(pageId: string) {
+    if (loading) return;
+    const pageText = data.pages[pageId];
+    if (!pageText) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await suggestVideos(data.aiKeys, { pageText, pageId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Suggestion failed.";
+      setError(msg === "YOUTUBE_API_KEY_MISSING"
+        ? "YouTube Data API key not configured. Add YOUTUBE_API_KEY to Cloudflare Pages env vars."
+        : msg);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function suggest() {
     if (loading) return;
@@ -139,11 +174,33 @@ export default function VideosPage() {
       {keptVideos.length > 0 && (
         <section className="mt-8">
           <h2 className="font-semibold text-white">Saved videos ({keptVideos.length})</h2>
-          <div className="mt-3 space-y-3">
-            {keptVideos.map((v) => (
-              <VideoCard key={v.id} v={v} playId={playId} setPlayId={setPlayId} />
-            ))}
-          </div>
+          {(() => {
+            // Group by page or topic
+            const groups = new Map<string, { label: string; videos: typeof keptVideos }>();
+            for (const v of keptVideos) {
+              const key = v.pageId ? `page:${v.pageId}` : v.topic ? `topic:${v.topic}` : "general";
+              if (!groups.has(key)) {
+                const pageNode = v.pageId ? data.nodes.find((n) => n.id === v.pageId) : null;
+                const label = pageNode?.title ?? v.topic ?? "General";
+                groups.set(key, { label, videos: [] });
+              }
+              groups.get(key)!.videos.push(v);
+            }
+            return Array.from(groups.entries()).map(([key, group]) => (
+              <div key={key} className="mt-4">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-400">
+                  <span className="h-1 w-4 rounded bg-brand-500/50" />
+                  {group.label}
+                  <span className="text-xs text-slate-600">({group.videos.length})</span>
+                </h3>
+                <div className="space-y-3">
+                  {group.videos.map((v) => (
+                    <VideoCard key={v.id} v={v} playId={playId} setPlayId={setPlayId} />
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
         </section>
       )}
 

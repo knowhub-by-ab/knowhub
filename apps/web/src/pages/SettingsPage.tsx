@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Settings as SettingsIcon,
   Plus,
@@ -8,6 +8,8 @@ import {
   KeyRound,
   ExternalLink,
   RefreshCw,
+  Music,
+  Loader2,
 } from "lucide-react";
 import { aiKeys, useAppData } from "@/lib/store";
 import { PROVIDER_PRESETS } from "@/lib/providers";
@@ -84,6 +86,102 @@ function CheckForUpdates() {
         <RefreshCw className={`h-4 w-4 ${status === "checking" ? "animate-spin" : ""}`} />
         {status === "checking" ? "Checking…" : "Check now"}
       </button>
+    </section>
+  );
+}
+
+function PuterSection() {
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = (window as any).puter;
+    if (p?.auth?.isSignedIn) {
+      setSignedIn(p.auth.isSignedIn());
+    } else {
+      setSignedIn(null); // Puter not loaded yet
+    }
+  }, []);
+
+  async function connectPuter() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = (window as any).puter;
+    if (!p?.auth?.signIn) return;
+    setLoading(true);
+    try {
+      await p.auth.signIn();
+      setSignedIn(p.auth.isSignedIn());
+    } catch {
+      // User cancelled
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function disconnectPuter() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = (window as any).puter;
+    if (!p?.auth?.signOut) return;
+    await p.auth.signOut();
+    setSignedIn(false);
+  }
+
+  return (
+    <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 place-items-center rounded-lg bg-violet-600/20 text-violet-300">
+          <Music className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 className="font-semibold text-white">Puter AI (Free TTS & MP3 download)</h2>
+          <p className="text-sm text-slate-400">
+            Puter provides free AI services including text-to-speech for MP3 audio download.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {signedIn === null && (
+          <p className="text-sm text-slate-500">Loading Puter status…</p>
+        )}
+        {signedIn === false && (
+          <>
+            <p className="text-sm text-slate-400">
+              Not connected. Sign in to Puter for higher TTS limits and MP3 download support.
+              Basic TTS (without sign-in) may still work with lower quotas.
+            </p>
+            <button
+              onClick={connectPuter}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              {loading ? "Connecting…" : "Connect Puter"}
+            </button>
+          </>
+        )}
+        {signedIn === true && (
+          <>
+            <p className="flex items-center gap-2 text-sm text-emerald-400">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Connected to Puter — MP3 audio download is available.
+            </p>
+            <button
+              onClick={disconnectPuter}
+              className="text-xs text-slate-500 hover:text-rose-400 underline"
+            >
+              Disconnect
+            </button>
+          </>
+        )}
+        <p className="text-xs text-slate-600">
+          Puter is completely free. No credit card needed.{" "}
+          <a href="https://puter.com" target="_blank" rel="noreferrer" className="text-violet-400 hover:text-violet-300">
+            Learn more ↗
+          </a>
+        </p>
+      </div>
     </section>
   );
 }
@@ -350,6 +448,7 @@ export default function SettingsPage() {
           committed or shared.
         </p>
       </section>
+      <PuterSection />
       <CheckForUpdates />
     </div>
   );

@@ -90,27 +90,32 @@ ${renderedHtml}
   setTimeout(() => { win.print(); win.close(); }, 400);
 }
 
-/**
- * Download the page content as an MP3 audio file using Puter.js free TTS.
- * Falls back to opening FreeTTS.org if Puter is unavailable.
- */
 export async function exportAudio(title: string, speakableText: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const p = (window as any).puter;
-  if (p?.ai?.txt2speech) {
-    try {
-      const audio = await p.ai.txt2speech(speakableText);
-      const src: string = audio?.src ?? "";
-      if (src) {
-        const resp = await fetch(src);
-        const blob = await resp.blob();
-        downloadBlob(blob, `${safeName(title)}.mp3`);
-        return;
-      }
-    } catch {
-      // fall through to FreeTTS
+  if (!p?.ai?.txt2speech) {
+    alert(
+      "Puter is not loaded. Please refresh the page.\n\nPuter provides free AI text-to-speech — no account needed for basic use, or sign in at puter.com for higher limits."
+    );
+    return;
+  }
+  try {
+    // Sign in if not already authenticated (for higher quota)
+    if (p.auth?.isSignedIn && !p.auth.isSignedIn()) {
+      await p.auth.signIn();
+    }
+    const audio = await p.ai.txt2speech(speakableText);
+    const src: string = audio?.src ?? "";
+    if (!src) throw new Error("No audio returned from Puter.");
+    const resp = await fetch(src);
+    const blob = await resp.blob();
+    downloadBlob(blob, `${safeName(title)}.mp3`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("sign") || msg.includes("auth") || msg.includes("login")) {
+      alert("Please sign in to Puter first. Go to Settings → Puter and click Connect.");
+    } else {
+      alert(`Audio download failed: ${msg}\n\nTip: Make sure you are connected to Puter in Settings.`);
     }
   }
-  // FreeTTS.org fallback — opens their site; user can paste the text.
-  window.open("https://freetts.com", "_blank");
 }

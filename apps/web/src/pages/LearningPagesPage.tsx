@@ -539,7 +539,7 @@ export default function LearningPagesPage() {
                       {[
                         { label: "Markdown (.md)", action: () => exportMarkdown(selectedTitle ?? "page", draft) },
                         { label: "Word (.doc)", action: () => exportDoc(selectedTitle ?? "page", previewHtml) },
-                        { label: "PDF (print)", action: () => exportPdf(selectedTitle ?? "page", previewHtml) },
+                        { label: "PDF (print)", action: () => exportPdf(selectedTitle ?? "page", previewRef.current?.innerHTML ?? previewHtml) },
                         { label: "Audio (.mp3, via Puter)", action: () => exportAudio(selectedTitle ?? "page", markdownToSpeakable(draft)) },
                       ].map((opt) => (
                         <button

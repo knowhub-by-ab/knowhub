@@ -118,6 +118,14 @@ export const MODULES: ModuleDef[] = [
     prdRef: "Module 2",
   },
   {
+    id: "bulk-download",
+    label: "Bulk Download",
+    path: "/app/bulk-download",
+    icon: Archive,
+    summary: "Download multiple learning pages as a ZIP file.",
+    prdRef: "Module G8",
+  },
+  {
     id: "videos",
     label: "Videos",
     path: "/app/videos",
@@ -164,14 +172,6 @@ export const MODULES: ModuleDef[] = [
     icon: Settings,
     summary: "AI providers, sync preferences and account configuration.",
     prdRef: "Module 7 (AI Providers)",
-  },
-  {
-    id: "bulk-download",
-    label: "Bulk Download",
-    path: "/app/bulk-download",
-    icon: Archive,
-    summary: "Download multiple learning pages as a ZIP file.",
-    prdRef: "Module G8",
   },
 ];
 
