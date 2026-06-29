@@ -101,7 +101,7 @@ export function getTTSState(): TTSState {
 }
 
 export function getAvailableVoices(): SpeechSynthesisVoice[] {
-  if (!isTTSSupported()) return [];
+  if (isNative() || !("speechSynthesis" in window)) return [];
   return window.speechSynthesis.getVoices();
 }
 
@@ -116,7 +116,7 @@ let _poll: ReturnType<typeof setInterval> | null = null;
 function startPoll() {
   if (_poll) return;
   _poll = setInterval(() => {
-    if (!isTTSSupported()) return;
+    if (isNative() || !("speechSynthesis" in window)) return;
     const ss = window.speechSynthesis;
     const nowPlaying = ss.speaking && !ss.paused;
     const nowPaused = ss.paused;
@@ -142,6 +142,7 @@ function stopPoll() {
  * fires with the platform default voice.
  */
 function getVoicesAsync(): Promise<SpeechSynthesisVoice[]> {
+  if (isNative() || !("speechSynthesis" in window)) return Promise.resolve([]);
   return new Promise((resolve) => {
     const voices = speechSynthesis.getVoices();
     if (voices.length > 0) { resolve(voices); return; }
