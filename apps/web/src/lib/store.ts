@@ -172,6 +172,7 @@ export function lightSnapshot() {
     nodes: state.nodes,
     aiKeys: state.aiKeys,
     github: state.github,
+    puterApiToken: state.puterApiToken,
   };
 }
 
@@ -226,7 +227,7 @@ export function applyRemoteState(next: Partial<AppData>, remoteUpdatedAt: number
  * state is preserved unchanged. This keeps Firestore light.
  */
 export function applyLightRemoteState(
-  light: { nodes?: AppData["nodes"]; aiKeys?: AppData["aiKeys"]; github?: AppData["github"] },
+  light: { nodes?: AppData["nodes"]; aiKeys?: AppData["aiKeys"]; github?: AppData["github"]; puterApiToken?: string },
   remoteUpdatedAt: number
 ) {
   state = {
@@ -234,6 +235,7 @@ export function applyLightRemoteState(
     nodes: light.nodes ?? state.nodes,
     aiKeys: light.aiKeys ?? state.aiKeys,
     github: light.github ?? state.github,
+    puterApiToken: light.puterApiToken ?? state.puterApiToken,
   };
   localUpdatedAt = remoteUpdatedAt;
   persist();

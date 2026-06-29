@@ -196,7 +196,10 @@ export default function LearningPagesPage() {
 
   function toggleTTS() {
     if (!isTTSSupported()) {
-      alert("Text-to-speech is not supported in this browser or WebView. Try Chrome or Safari on a desktop.");
+      // WebView / unsupported browser — try Puter TTS fallback
+      if (speaking) { stopTTS(); return; }
+      if (!draft.trim()) return;
+      void import("@/lib/tts").then(({ speakViaPuter }) => speakViaPuter(markdownToSpeakable(draft), { title: selectedTitle ?? "" }));
       return;
     }
     if (speaking || isSpeaking()) {
@@ -481,7 +484,8 @@ export default function LearningPagesPage() {
 
           {/* Editor + AI */}
           <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03]">
-            <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2">
+            {/* Title row */}
+            <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2">
               <button
                 className="lg:hidden grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-slate-400 hover:text-white"
                 onClick={() => setTreePanelOpen(true)}
@@ -492,7 +496,10 @@ export default function LearningPagesPage() {
               <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-200">
                 {selectedTitle}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+            </div>
+            {/* Action bar — scrolls horizontally on mobile */}
+            <div className="flex items-center gap-1.5 overflow-x-auto border-b border-white/10 px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex shrink-0 items-center gap-1.5">
                 {selectedNode && (
                   <button
                     onClick={() => tree.setStatus(selectedNode.id, nextStatus(selectedNode.status))}

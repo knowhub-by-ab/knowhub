@@ -1,5 +1,6 @@
-// Browser Text-to-Speech wrapper using window.speechSynthesis.
+// Browser Text-to-Speech wrapper using window.speechSynthesis with Puter TTS fallback.
 // Provides a global player state with event-driven updates so components can subscribe.
+import { getState } from "./store";
 
 export function isTTSSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
@@ -59,6 +60,7 @@ const DEFAULT_STATE: TTSState = {
 let _state: TTSState = { ...DEFAULT_STATE };
 const _listeners = new Set<() => void>();
 let _utt: SpeechSynthesisUtterance | null = null;
+let _puterAudio: HTMLAudioElement | null = null;
 
 function notify() {
   _listeners.forEach((fn) => fn());
@@ -186,12 +188,14 @@ export function speak(text: string, opts?: { title?: string; rate?: number; voic
 }
 
 export function pauseTTS(): void {
+  if (_puterAudio) { _puterAudio.pause(); update({ playing: false, paused: true }); return; }
   if (!isTTSSupported()) return;
   window.speechSynthesis.pause();
   update({ playing: false, paused: true });
 }
 
 export function resumeTTS(): void {
+  if (_puterAudio) { void _puterAudio.play(); update({ playing: true, paused: false }); return; }
   if (!isTTSSupported()) return;
   window.speechSynthesis.resume();
   update({ playing: true, paused: false });
@@ -199,7 +203,15 @@ export function resumeTTS(): void {
 }
 
 export function stopTTS(): void {
-  if (!isTTSSupported()) return;
+  if (_puterAudio) {
+    _puterAudio.pause();
+    _puterAudio.src = "";
+    _puterAudio = null;
+    stopPoll();
+    update({ ...DEFAULT_STATE });
+    return;
+  }
+  if (!isTTSSupported()) { update({ ...DEFAULT_STATE }); return; }
   window.speechSynthesis.cancel();
   stopPoll();
   update({ ...DEFAULT_STATE });
@@ -238,11 +250,75 @@ export function fastForward(seconds = 30): void {
   speak(_state.text.slice(newIndex), { title: _state.title, rate: _state.rate, voiceURI: _state.voiceURI });
 }
 
-/** Export as MP3 — not natively possible in browsers via Web Speech API.
- * We use the MediaRecorder trick: record system audio is not available cross-origin.
- * Best we can do is show a message. */
 export const canDownloadTTS = false;
 
 // Legacy compatibility
 export function isSpeaking(): boolean { return _state.playing; }
 export function isPaused(): boolean { return _state.paused; }
+
+/**
+ * Call Puter TTS REST API directly with an API key (no puter.js SDK needed).
+ * Returns an audio Blob. Works in any browser/WebView that supports fetch + audio.
+ */
+export async function puterTTSBlob(text: string, token: string): Promise<Blob> {
+  const resp = await fetch("https://api.puter.com/drivers/call", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      interface: "puter-tts",
+      method: "synthesize",
+      args: { text },
+    }),
+  });
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => resp.statusText);
+    throw new Error(`Puter API ${resp.status}: ${errText}`);
+  }
+  return resp.blob();
+}
+
+/**
+ * Play text via Puter TTS REST API (fallback for browsers without SpeechSynthesis).
+ * Updates the shared TTS state so TTSPlayer shows controls.
+ */
+export async function speakViaPuter(text: string, opts?: { title?: string }): Promise<void> {
+  const token = getState().puterApiToken;
+  if (!token) {
+    alert("Text-to-speech requires a Puter API token.\n\nGo to Settings → Puter and paste your free API token from puter.com → Account → API Keys.");
+    return;
+  }
+  // Stop any existing playback
+  stopTTS();
+  update({ active: true, playing: false, paused: false, title: opts?.title ?? "", text, charIndex: 0, progress: 0 });
+  try {
+    const blob = await puterTTSBlob(text, token);
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    _puterAudio = audio;
+    audio.ontimeupdate = () => {
+      const progress = audio.duration > 0 ? audio.currentTime / audio.duration : 0;
+      update({ progress, playing: !audio.paused, paused: audio.paused });
+    };
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      _puterAudio = null;
+      update({ ...DEFAULT_STATE });
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      _puterAudio = null;
+      update({ active: false, playing: false, paused: false });
+      alert("Puter audio playback failed. Check your Puter API token in Settings.");
+    };
+    await audio.play();
+    update({ active: true, playing: true, paused: false });
+  } catch (err) {
+    _puterAudio = null;
+    update({ active: false, playing: false, paused: false });
+    const msg = err instanceof Error ? err.message : String(err);
+    alert(`Puter TTS failed: ${msg}\n\nCheck your Puter API token in Settings → Puter.`);
+  }
+}

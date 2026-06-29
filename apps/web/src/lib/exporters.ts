@@ -1,5 +1,6 @@
 // Page export utilities: Markdown, DOC (Word-compatible HTML), PDF (print dialog), Audio (Puter TTS).
 import { getState } from "./store";
+import { puterTTSBlob } from "./tts";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -92,27 +93,13 @@ ${renderedHtml}
 }
 
 export async function exportAudio(title: string, speakableText: string): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const p = (window as any).puter;
-  if (!p?.ai?.txt2speech) {
-    alert("Puter is not loaded. Please refresh the page.");
-    return;
-  }
-
-  // Inject stored API token so Puter uses it instead of requiring browser login
   const token = getState().puterApiToken;
   if (!token) {
     alert("Puter API token not set.\n\nGo to Settings → Puter and paste your API token.\nGet a free token at puter.com → Account → API Keys.");
     return;
   }
-  p.authToken = token;
-
   try {
-    const audio = await p.ai.txt2speech(speakableText);
-    const src: string = audio?.src ?? "";
-    if (!src) throw new Error("No audio returned from Puter.");
-    const resp = await fetch(src);
-    const blob = await resp.blob();
+    const blob = await puterTTSBlob(speakableText, token);
     downloadBlob(blob, `${safeName(title)}.mp3`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
