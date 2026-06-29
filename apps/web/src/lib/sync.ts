@@ -49,15 +49,19 @@ export function initSync(): void {
             nodes: (remote as AppData).nodes,
             aiKeys: (remote as AppData).aiKeys,
             github: remoteGithub,
+            puterApiToken: (remote as AppData).puterApiToken,
           },
           remoteAt
         );
         applyingRemote = false;
-      } else if (remoteGithub?.token) {
+      } else if (remoteGithub?.token || (remote as AppData).puterApiToken) {
         // Even if local state is newer overall, always merge GitHub connection
-        // so a new device with empty github picks it up without a full timestamp win.
+        // and Puter token so a new device picks them up without a full timestamp win.
         applyingRemote = true;
-        applyLightRemoteState({ github: remoteGithub }, getUpdatedAt());
+        applyLightRemoteState({
+          github: remoteGithub,
+          puterApiToken: (remote as AppData).puterApiToken,
+        }, getUpdatedAt());
         applyingRemote = false;
       }
       return applied;
