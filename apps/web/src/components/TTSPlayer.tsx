@@ -95,18 +95,8 @@ export default function TTSPlayer() {
             )}
           </div>
 
-          {/* Core controls */}
-          <div className="flex items-center gap-1">
-            {inPodcastMode && (
-              <button
-                onClick={() => playPodcastEpisode(podcastIdx - 1)}
-                disabled={podcastIdx <= 0}
-                title="Previous episode"
-                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white disabled:opacity-30"
-              >
-                <SkipBack className="h-4 w-4" />
-              </button>
-            )}
+          {/* Core controls — compact, mobile-safe */}
+          <div className="flex shrink-0 items-center gap-1">
             <button
               onClick={() => rewind(30)}
               title="Rewind 30s"
@@ -135,16 +125,6 @@ export default function TTSPlayer() {
             >
               <Square className="h-3.5 w-3.5" />
             </button>
-            {inPodcastMode && (
-              <button
-                onClick={() => playPodcastEpisode(podcastIdx + 1)}
-                disabled={podcastIdx >= podcastState.episodes.length - 1}
-                title="Next episode"
-                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white disabled:opacity-30"
-              >
-                <SkipForward className="h-4 w-4" />
-              </button>
-            )}
           </div>
 
           {/* Expand/collapse */}
@@ -160,6 +140,28 @@ export default function TTSPlayer() {
         {/* Expanded controls */}
         {!minimized && (
           <div className="mt-2 flex flex-wrap items-center gap-3 pb-1">
+            {/* Podcast Prev/Next */}
+            {inPodcastMode && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => playPodcastEpisode(podcastIdx - 1)}
+                  disabled={podcastIdx <= 0}
+                  title="Previous episode"
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-400 hover:bg-white/5 hover:text-white disabled:opacity-30"
+                >
+                  <SkipBack className="h-3.5 w-3.5" /> Prev
+                </button>
+                <span className="text-xs text-slate-500">Ep {podcastIdx + 1}/{podcastState.episodes.length}</span>
+                <button
+                  onClick={() => playPodcastEpisode(podcastIdx + 1)}
+                  disabled={podcastIdx >= podcastState.episodes.length - 1}
+                  title="Next episode"
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-400 hover:bg-white/5 hover:text-white disabled:opacity-30"
+                >
+                  Next <SkipForward className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
             {/* Speed */}
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500">Speed:</span>

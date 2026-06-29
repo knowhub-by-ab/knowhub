@@ -195,6 +195,8 @@ function merged(next: Partial<AppData>): AppData {
     highlights: next.highlights ?? [],
     videos: next.videos ?? [],
     chatFolders: next.chatFolders ?? [],
+    // Preserve local-only fields — puterApiToken is never in remote exports
+    puterApiToken: next.puterApiToken ?? state?.puterApiToken,
   };
 }
 

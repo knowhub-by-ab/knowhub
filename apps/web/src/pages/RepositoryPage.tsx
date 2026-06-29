@@ -110,6 +110,12 @@ export default function RepositoryPage() {
         notesList: snap.notesList ?? [],
         resources: snap.resources,
         quizzes: snap.quizzes,
+        flashcards: snap.flashcards ?? [],
+        questionBanks: snap.questionBanks ?? [],
+        chatSessions: snap.chatSessions ?? [],
+        videos: snap.videos ?? [],
+        highlights: snap.highlights ?? [],
+        chatFolders: snap.chatFolders ?? [],
         aiKeys: data.aiKeys,
         github: data.github,
       });

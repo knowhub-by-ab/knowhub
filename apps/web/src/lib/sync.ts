@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { db, subscribeAuth } from "./auth";
-import { getUpdatedAt, lightSnapshot, applyLightRemoteState, subscribeStore } from "./store";
+import { getUpdatedAt, lightSnapshot, applyLightRemoteState, subscribeStore, getState } from "./store";
 import type { AppData } from "./types";
 
 // Cloud sync — Firestore stores ONLY light metadata (nodes, aiKeys, github).
@@ -38,7 +38,9 @@ export function initSync(): void {
 
     const applyIfNewer = (remote: LightData | AppData | undefined, remoteAt: number) => {
       if (!remote) return false;
-      if (remoteAt > getUpdatedAt()) {
+      const remoteGithub = (remote as AppData).github;
+      const applied = remoteAt > getUpdatedAt();
+      if (applied) {
         applyingRemote = true;
         // Only apply light fields; ignore any heavy content that may be in
         // old Firestore docs (migration safety).
@@ -46,18 +48,24 @@ export function initSync(): void {
           {
             nodes: (remote as AppData).nodes,
             aiKeys: (remote as AppData).aiKeys,
-            github: (remote as AppData).github,
+            github: remoteGithub,
           },
           remoteAt
         );
         applyingRemote = false;
-        return true;
+      } else if (remoteGithub?.token) {
+        // Even if local state is newer overall, always merge GitHub connection
+        // so a new device with empty github picks it up without a full timestamp win.
+        applyingRemote = true;
+        applyLightRemoteState({ github: remoteGithub }, getUpdatedAt());
+        applyingRemote = false;
       }
-      return false;
+      return applied;
     };
 
     // 1. Initial reconcile: newer side wins; seed remote if missing.
     try {
+      const hadGithubBefore = !!getState().github?.token;
       const snap = await getDoc(ref);
       if (snap.exists()) {
         const d = snap.data() as { data?: LightData | AppData; updatedAt?: number };
@@ -67,6 +75,14 @@ export function initSync(): void {
         }
       } else {
         await writeUp();
+      }
+      // If this device just received a GitHub token it didn't have before,
+      // auto-pull content from GitHub so the app isn't empty.
+      const nowHasGithub = !!getState().github?.token;
+      if (!hadGithubBefore && nowHasGithub) {
+        import("./githubSync").then(({ syncGithubNow }) => {
+          syncGithubNow().catch(() => {});
+        });
       }
     } catch {
       // offline / rules — keep working locally; writer retries on change.
