@@ -19,6 +19,7 @@ export const IMPLEMENTED_MODULES: Record<
   "question-bank": lazy(() => import("@/pages/QuestionBankPage")),
   flashcards: lazy(() => import("@/pages/FlashcardsPage")),
   videos: lazy(() => import("@/pages/VideosPage")),
+  podcast: lazy(() => import("@/pages/PodcastPage")),
   guide: lazy(() => import("@/pages/GuidePage")),
   settings: lazy(() => import("@/pages/SettingsPage")),
   "ai-chat": lazy(() => import("@/pages/AiChatPage")),

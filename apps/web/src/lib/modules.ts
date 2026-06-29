@@ -15,6 +15,7 @@ import {
   BookOpen,
   Layers,
   Youtube,
+  Mic,
   type LucideIcon,
 } from "lucide-react";
 
@@ -122,6 +123,14 @@ export const MODULES: ModuleDef[] = [
     icon: Youtube,
     summary: "AI-suggested YouTube videos (<20 min) for your topics.",
     prdRef: "Module G6",
+  },
+  {
+    id: "podcast",
+    label: "Podcast",
+    path: "/app/podcast",
+    icon: Mic,
+    summary: "Listen to your learning pages read aloud, one episode at a time.",
+    prdRef: "Module G7",
   },
   {
     id: "question-bank",

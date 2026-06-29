@@ -134,7 +134,23 @@ function safeName(s: string): string {
   return (s.trim() || "untitled").replace(/[^\w.-]+/g, "-").slice(0, 60);
 }
 
-/** Push a full snapshot: knowhub.json + notes.md + knowledge/<id>.md per page. */
+const HASH_STORE_KEY = "knowhub:sync:hashes";
+
+function quickHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+function loadHashes(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(HASH_STORE_KEY) ?? "{}"); } catch { return {}; }
+}
+
+function saveHashes(h: Record<string, number>) {
+  localStorage.setItem(HASH_STORE_KEY, JSON.stringify(h));
+}
+
+/** Push a delta snapshot: only files whose content changed since last sync. */
 export async function syncToRepo(
   token: string,
   owner: string,
@@ -143,22 +159,26 @@ export async function syncToRepo(
   onProgress?: (msg: string) => void
 ): Promise<void> {
   const stamp = new Date().toISOString();
-  onProgress?.("Writing knowhub.json…");
-  await putFile(
-    token,
-    owner,
-    repo,
+  const hashes = loadHashes();
+  let changed = 0;
+
+  async function maybePut(path: string, content: string, message: string) {
+    const h = quickHash(content);
+    if (hashes[path] === h) return; // unchanged — skip
+    await putFile(token, owner, repo, path, content, message);
+    hashes[path] = h;
+    changed++;
+  }
+
+  onProgress?.("Checking knowhub.json…");
+  await maybePut(
     "knowhub.json",
     JSON.stringify(buildExport(data), null, 2),
     `knowhub: sync snapshot ${stamp}`
   );
 
-  onProgress?.("Writing notes…");
   for (const note of data.notesList) {
-    await putFile(
-      token,
-      owner,
-      repo,
+    await maybePut(
       `notes/${safeName(note.title)}.md`,
       `# ${note.title}\n\n${note.body}`,
       `notes: ${note.title}`
@@ -171,17 +191,16 @@ export async function syncToRepo(
     i++;
     const node = data.nodes.find((n) => n.id === id);
     const title = node?.title ?? id;
-    onProgress?.(`Writing page ${i}/${pageIds.length}: ${title}…`);
-    await putFile(
-      token,
-      owner,
-      repo,
+    onProgress?.(`Checking page ${i}/${pageIds.length}…`);
+    await maybePut(
       `knowledge/${id}.md`,
       `# ${title}\n\n${data.pages[id]}`,
       `docs: update ${title}`
     );
   }
-  onProgress?.("Done.");
+
+  saveHashes(hashes);
+  onProgress?.(changed === 0 ? "Everything up to date." : `Done — ${changed} file${changed === 1 ? "" : "s"} updated.`);
 }
 
 export async function importFromRepo(
