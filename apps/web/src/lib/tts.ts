@@ -1,8 +1,15 @@
-// Browser Text-to-Speech wrapper using window.speechSynthesis with Puter TTS fallback.
+// Browser Text-to-Speech wrapper. Uses native Android TTS (Capacitor plugin) when
+// running inside the APK, browser speechSynthesis on web.
 // Provides a global player state with event-driven updates so components can subscribe.
+import { Capacitor } from "@capacitor/core";
 import { getState } from "./store";
 
+function isNative(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
 export function isTTSSupported(): boolean {
+  if (isNative()) return true;
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
@@ -61,6 +68,24 @@ let _state: TTSState = { ...DEFAULT_STATE };
 const _listeners = new Set<() => void>();
 let _utt: SpeechSynthesisUtterance | null = null;
 let _puterAudio: HTMLAudioElement | null = null;
+
+// ---------------------------------------------------------------------------
+// Native Android TTS (Capacitor plugin — only used inside the APK)
+// ---------------------------------------------------------------------------
+async function nativeSpeak(text: string, rate: number): Promise<void> {
+  const { TextToSpeech } = await import("@capacitor-community/text-to-speech");
+  // speak() resolves when the utterance finishes
+  await TextToSpeech.speak({ text, lang: "en-US", rate, pitch: 1.0, volume: 1.0, category: "ambient" });
+  update({ ...DEFAULT_STATE });
+}
+
+async function nativeStop(): Promise<void> {
+  try {
+    const { TextToSpeech } = await import("@capacitor-community/text-to-speech");
+    await TextToSpeech.stop();
+  } catch { /* ignore */ }
+  update({ ...DEFAULT_STATE });
+}
 
 function notify() {
   _listeners.forEach((fn) => fn());
@@ -126,8 +151,20 @@ function getVoicesAsync(): Promise<SpeechSynthesisVoice[]> {
 }
 
 export function speak(text: string, opts?: { title?: string; rate?: number; voiceURI?: string }): void {
+  if (isNative()) {
+    void nativeStop();
+    update({
+      active: true, playing: true, paused: false,
+      title: opts?.title ?? "", text, charIndex: 0, progress: 0,
+      rate: opts?.rate ?? _state.rate, voiceURI: "",
+    });
+    void nativeSpeak(text, opts?.rate ?? _state.rate).catch((err) => {
+      update({ active: false, playing: false, paused: false });
+      console.error("[TTS] Native speak error:", err);
+    });
+    return;
+  }
   if (!isTTSSupported()) {
-    // Surface a clear error rather than silently doing nothing
     update({ active: false, playing: false, paused: false });
     console.warn("[TTS] speechSynthesis is not available on this device/browser.");
     return;
@@ -188,6 +225,7 @@ export function speak(text: string, opts?: { title?: string; rate?: number; voic
 }
 
 export function pauseTTS(): void {
+  if (isNative()) { void nativeStop(); update({ playing: false, paused: false }); return; }
   if (_puterAudio) { _puterAudio.pause(); update({ playing: false, paused: true }); return; }
   if (!isTTSSupported()) return;
   window.speechSynthesis.pause();
@@ -195,6 +233,8 @@ export function pauseTTS(): void {
 }
 
 export function resumeTTS(): void {
+  // Native has no pause/resume — pause is equivalent to stop, so resume is a no-op
+  if (isNative()) return;
   if (_puterAudio) { void _puterAudio.play(); update({ playing: true, paused: false }); return; }
   if (!isTTSSupported()) return;
   window.speechSynthesis.resume();
@@ -203,6 +243,7 @@ export function resumeTTS(): void {
 }
 
 export function stopTTS(): void {
+  if (isNative()) { void nativeStop(); return; }
   if (_puterAudio) {
     _puterAudio.pause();
     _puterAudio.src = "";

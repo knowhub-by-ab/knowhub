@@ -196,7 +196,7 @@ export default function LearningPagesPage() {
 
   function toggleTTS() {
     if (!isTTSSupported()) {
-      alert("Text-to-speech is not available in the Android app.\n\nTo listen, open KnowHub in Chrome browser on your phone instead.");
+      alert("Text-to-speech is not available on this device.");
       return;
     }
     if (speaking || isSpeaking()) {

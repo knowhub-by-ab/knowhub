@@ -74,7 +74,7 @@ export default function PodcastPage() {
 
   function playEpisode(id: string, title: string) {
     if (!isTTSSupported()) {
-      alert("Text-to-speech is not available in the Android app.\n\nTo listen, open KnowHub in Chrome browser on your phone instead.");
+      alert("Text-to-speech is not available on this device.");
       return;
     }
     const body = data.pages[id] ?? "";
