@@ -11,7 +11,13 @@ let _episodes: PodcastEpisode[] = [];
 let _currentIdx = -1;
 const _listeners = new Set<() => void>();
 
-function notify() { _listeners.forEach((fn) => fn()); }
+// Cached snapshot — useSyncExternalStore requires referential stability between calls.
+let _snapshot = { episodes: _episodes, currentIdx: _currentIdx };
+
+function notify() {
+  _snapshot = { episodes: _episodes, currentIdx: _currentIdx };
+  _listeners.forEach((fn) => fn());
+}
 
 export function subscribePodcast(fn: () => void): () => void {
   _listeners.add(fn);
@@ -19,7 +25,7 @@ export function subscribePodcast(fn: () => void): () => void {
 }
 
 export function getPodcastState() {
-  return { episodes: _episodes, currentIdx: _currentIdx };
+  return _snapshot;
 }
 
 export function setPodcastEpisodes(episodes: PodcastEpisode[], currentIdx: number) {
