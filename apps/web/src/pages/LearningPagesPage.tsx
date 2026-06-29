@@ -196,10 +196,7 @@ export default function LearningPagesPage() {
 
   function toggleTTS() {
     if (!isTTSSupported()) {
-      // WebView / unsupported browser — try Puter TTS fallback
-      if (speaking) { stopTTS(); return; }
-      if (!draft.trim()) return;
-      void import("@/lib/tts").then(({ speakViaPuter }) => speakViaPuter(markdownToSpeakable(draft), { title: selectedTitle ?? "" }));
+      alert("Text-to-speech is not available in the Android app.\n\nTo listen, open KnowHub in Chrome browser on your phone instead.");
       return;
     }
     if (speaking || isSpeaking()) {

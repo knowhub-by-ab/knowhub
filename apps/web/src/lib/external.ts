@@ -5,7 +5,7 @@
 export type DiscussTarget = "chatgpt" | "gemini";
 
 function buildPrompt(title: string, markdown: string): string {
-  const excerpt = markdown.slice(0, 2000).trim();
+  const excerpt = markdown.slice(0, 12000).trim();
   return `I'm learning about "${title}". Here is the content:\n\n${excerpt}\n\nPlease help me understand this better. What are the key concepts, and do you have any tips or examples to make it clearer?`;
 }
 

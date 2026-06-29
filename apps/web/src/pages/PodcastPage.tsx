@@ -1,7 +1,7 @@
 import { useSyncExternalStore, useState, useEffect, useRef } from "react";
 import { Mic, Play, Square, Clock, ChevronRight, ChevronDown, SkipBack, SkipForward } from "lucide-react";
 import { useAppData } from "@/lib/store";
-import { speak, stopTTS, subscribeToTTS, getTTSState, markdownToSpeakable } from "@/lib/tts";
+import { speak, stopTTS, subscribeToTTS, getTTSState, markdownToSpeakable, isTTSSupported } from "@/lib/tts";
 import type { TreeNode } from "@/lib/types";
 import { setPodcastEpisodes, setPodcastCurrentIdx, clearPodcast } from "@/lib/podcastStore";
 import type { PodcastEpisode } from "@/lib/podcastStore";
@@ -73,6 +73,10 @@ export default function PodcastPage() {
   }
 
   function playEpisode(id: string, title: string) {
+    if (!isTTSSupported()) {
+      alert("Text-to-speech is not available in the Android app.\n\nTo listen, open KnowHub in Chrome browser on your phone instead.");
+      return;
+    }
     const body = data.pages[id] ?? "";
     const text = markdownToSpeakable(body);
     setPlayingId(id);
