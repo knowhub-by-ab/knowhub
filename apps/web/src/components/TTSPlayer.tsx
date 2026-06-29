@@ -21,7 +21,7 @@ import {
   setVoice,
   rewind,
   fastForward,
-  getAvailableVoices,
+  getAvailableVoices, getNativeVoices,
   speak,
 } from "@/lib/tts";
 import { subscribePodcast, getPodcastState, setPodcastCurrentIdx } from "@/lib/podcastStore";
@@ -39,13 +39,16 @@ export default function TTSPlayer() {
   const [downloadingAudio, setDownloadingAudio] = useState(false);
 
   useEffect(() => {
-    function loadVoices() {
-      const v = getAvailableVoices();
-      if (v.length) setVoices(v);
-    }
-    loadVoices();
-    window.speechSynthesis?.addEventListener("voiceschanged", loadVoices);
-    return () => window.speechSynthesis?.removeEventListener("voiceschanged", loadVoices);
+    // Try native voices first (async), then fall back to browser voices
+    getNativeVoices().then((nv) => {
+      if (nv.length) { setVoices(nv); return; }
+      function loadVoices() {
+        const v = getAvailableVoices();
+        if (v.length) setVoices(v);
+      }
+      loadVoices();
+      window.speechSynthesis?.addEventListener("voiceschanged", loadVoices);
+    });
   }, []);
 
   async function handleDownloadAudio() {
