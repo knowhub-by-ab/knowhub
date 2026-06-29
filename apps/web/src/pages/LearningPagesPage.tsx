@@ -211,19 +211,33 @@ export default function LearningPagesPage() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Highlight toolbar
+  // Highlight toolbar — for new selections
   const [hlToolbar, setHlToolbar] = useState<{ x: number; y: number } | null>(null);
   const [hlColor, setHlColor] = useState<HighlightColor>("yellow");
+  // Highlight edit popup — for clicking an existing mark
+  const [hlEdit, setHlEdit] = useState<{ id: string; x: number; y: number } | null>(null);
 
   function onPreviewMouseUp(e: React.MouseEvent) {
+    // Check if user clicked an existing highlight mark
+    const mark = (e.target as HTMLElement).closest("[data-hid]") as HTMLElement | null;
+    if (mark) {
+      const hid = mark.dataset.hid ?? "";
+      if (hid) {
+        e.stopPropagation();
+        setHlEdit({ id: hid, x: e.clientX, y: e.clientY });
+        setHlToolbar(null);
+        return;
+      }
+    }
+
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) {
       setHlToolbar(null);
+      setHlEdit(null);
       return;
     }
-    const rect = (e.target as HTMLElement).closest(".md-prose")?.getBoundingClientRect();
-    if (!rect) return;
     setHlToolbar({ x: e.clientX, y: e.clientY });
+    setHlEdit(null);
   }
 
   function applyHighlight(color: HighlightColor) {
@@ -233,6 +247,19 @@ export default function LearningPagesPage() {
     if (h) highlightStore.add(h);
     sel.removeAllRanges();
     setHlToolbar(null);
+  }
+
+  function changeHighlightColor(id: string, color: HighlightColor) {
+    const existing = data.highlights.find((h) => h.id === id);
+    if (!existing) return;
+    highlightStore.remove(id);
+    highlightStore.add({ ...existing, id: crypto.randomUUID(), color, createdAt: Date.now() });
+    setHlEdit(null);
+  }
+
+  function removeHighlight(id: string) {
+    highlightStore.remove(id);
+    setHlEdit(null);
   }
 
   // AI assist
@@ -677,7 +704,7 @@ export default function LearningPagesPage() {
                       className="md-prose max-w-full break-words"
                       dangerouslySetInnerHTML={{ __html: previewHtml }}
                     />
-                    {/* Floating highlight toolbar */}
+                    {/* Floating highlight toolbar — for new selection */}
                     {hlToolbar && (
                       <div
                         className="fixed z-50 flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-900/95 px-3 py-2 shadow-xl backdrop-blur"
@@ -693,6 +720,30 @@ export default function LearningPagesPage() {
                           />
                         ))}
                         <button onClick={() => setHlToolbar(null)} className="ml-1 text-slate-500 hover:text-white">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    {/* Highlight edit popup — appears when clicking an existing highlight */}
+                    {hlEdit && (
+                      <div
+                        className="fixed z-50 flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-900/95 px-3 py-2 shadow-xl backdrop-blur"
+                        style={{ left: hlEdit.x, top: hlEdit.y - 52 }}
+                      >
+                        <span className="text-xs text-slate-400 mr-1">Change:</span>
+                        {(["yellow", "green", "blue", "pink"] as HighlightColor[]).map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => changeHighlightColor(hlEdit.id, c)}
+                            title={c}
+                            className={`h-5 w-5 rounded-full ring-2 transition hover:scale-110 ${HIGHLIGHT_CLASSES[c].split(" ")[0]} ring-transparent hover:ring-white`}
+                          />
+                        ))}
+                        <button
+                          onClick={() => removeHighlight(hlEdit.id)}
+                          title="Remove highlight"
+                          className="ml-1 rounded p-0.5 text-slate-400 hover:bg-rose-500/20 hover:text-rose-400"
+                        >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
