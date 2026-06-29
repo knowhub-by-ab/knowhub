@@ -99,13 +99,13 @@ async function nativeSpeak(text: string, rate: number): Promise<void> {
   }, 500);
 }
 
+// nativeStop only kills audio + timer — callers manage state updates themselves
 async function nativeStop(): Promise<void> {
   clearNativeTimer();
   try {
     const { TextToSpeech } = await import("@capacitor-community/text-to-speech");
     await TextToSpeech.stop();
   } catch { /* ignore */ }
-  update({ ...DEFAULT_STATE });
 }
 
 function notify() {
@@ -247,7 +247,7 @@ export function speak(text: string, opts?: { title?: string; rate?: number; voic
 }
 
 export function pauseTTS(): void {
-  if (isNative()) { void nativeStop(); update({ playing: false, paused: false }); return; }
+  if (isNative()) { update({ playing: false, paused: false }); void nativeStop(); return; }
   if (_puterAudio) { _puterAudio.pause(); update({ playing: false, paused: true }); return; }
   if (!isTTSSupported()) return;
   window.speechSynthesis.pause();
@@ -265,7 +265,7 @@ export function resumeTTS(): void {
 }
 
 export function stopTTS(): void {
-  if (isNative()) { void nativeStop(); return; }
+  if (isNative()) { update({ ...DEFAULT_STATE }); void nativeStop(); return; }
   if (_puterAudio) {
     _puterAudio.pause();
     _puterAudio.src = "";
