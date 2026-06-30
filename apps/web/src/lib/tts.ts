@@ -84,11 +84,40 @@ function getTTS() {
   return import("@capacitor-community/text-to-speech");
 }
 
+// Android TTS hard limit is 4000 chars. Split at sentence boundaries into ≤3800-char chunks.
+function splitIntoChunks(text: string, maxLen = 3800): string[] {
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > maxLen) {
+    // Find last sentence boundary (. ! ?) before the limit
+    let cut = remaining.lastIndexOf(". ", maxLen);
+    if (cut < maxLen / 2) cut = remaining.lastIndexOf(" ", maxLen);
+    if (cut < 1) cut = maxLen;
+    else cut += 1; // include the period/space
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+// Speaks chunks sequentially using plugin.
+async function speakChunks(chunks: string[], rate: number): Promise<void> {
+  const { TextToSpeech } = await getTTS();
+  for (const chunk of chunks) {
+    if (!_nativeTimer) return; // stopped by user
+    await TextToSpeech.speak({ text: chunk, lang: "en-US", rate, pitch: 1.0, volume: 1.0 });
+  }
+}
+
 // Starts Android TTS + a progress timer that is the sole source of state updates.
 // offsetMs: resume from a mid-point (elapsed ms already spoken).
 function nativeSpeak(text: string, rate: number, offsetMs = 0): void {
   clearNativeTimer();
   _nativePauseElapsed = 0;
+
+  const chunks = splitIntoChunks(text);
 
   getTTS()
     .then(({ TextToSpeech }) => {
@@ -98,12 +127,12 @@ function nativeSpeak(text: string, rate: number, offsetMs = 0): void {
           update({ title: "⚠️ Android TTS language not installed — opening installer…" });
           return TextToSpeech.openInstall();
         }
-        return TextToSpeech.speak({ text, lang: "en-US", rate, pitch: 1.0, volume: 1.0 });
+        return speakChunks(chunks, rate);
       });
     })
+    .then(() => { if (_nativeTimer) { clearNativeTimer(); update({ ...DEFAULT_STATE }); } })
     .catch((e: unknown) => {
       const msg = e instanceof Error ? e.message : String(e);
-      // Show error in player title so user can see what went wrong
       update({ title: `TTS error: ${msg.slice(0, 80)}` });
     });
 
