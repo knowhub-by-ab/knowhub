@@ -55,13 +55,12 @@ export const PROVIDER_PRESETS: Record<ProviderId, ProviderPreset> = {
     getKeyUrl: "https://platform.openai.com/api-keys",
   },
   puter: {
-    label: "Puter.js (free, keyless)",
+    label: "Puter.js",
     baseUrl: "",
     model: "gpt-4o-mini",
     kind: "puter",
-    keyHint: "(no API key needed)",
+    keyHint: "Your Puter API token (from puter.com → Account → API Keys)",
     getKeyUrl: "https://puter.com",
-    keyless: true,
   },
   custom: {
     label: "Custom (OpenAI-compatible)",

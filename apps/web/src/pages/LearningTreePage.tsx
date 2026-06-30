@@ -19,7 +19,8 @@ import {
   Upload,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
-import { generateLearningTree, generateTreeChanges, improveTree } from "@/lib/aiActions";
+import { generateLearningTree, generateTreeChanges, proposeTreeImprovements, applyTreeProposals } from "@/lib/aiActions";
+import type { TreeProposal } from "@/lib/aiActions";
 import {
   STATUS_LABELS,
   STATUS_CYCLE,
@@ -291,6 +292,8 @@ export default function LearningTreePage() {
   const [genParent, setGenParent] = useState<string>("");
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<TreeProposal[] | null>(null);
+  const [accepted, setAccepted] = useState<Set<number>>(new Set());
   const [syllabusMode, setSyllabusMode] = useState(false);
   const [syllabusText, setSyllabusText] = useState("");
   const [syllabusLoading, setSyllabusLoading] = useState(false);
@@ -479,7 +482,7 @@ export default function LearningTreePage() {
           </button>
         </div>
         {/* Improve tree */}
-        {flat.length > 0 && (
+        {flat.length > 0 && !proposals && (
           <button
             onClick={async () => {
               if (genLoading) return;
@@ -487,7 +490,10 @@ export default function LearningTreePage() {
               setGenLoading(true);
               try {
                 const rootTitles = tree.childrenOf(data.nodes, null).map((n) => n.title).join(", ");
-                await improveTree(data.aiKeys, data.nodes, rootTitles || "my learning tree");
+                const p = await proposeTreeImprovements(data.aiKeys, data.nodes, rootTitles || "my learning tree");
+                const all = new Set(p.map((_, i) => i));
+                setProposals(p);
+                setAccepted(all);
               } catch (err) {
                 setGenError(err instanceof Error ? err.message : "Improve failed.");
               } finally {
@@ -497,8 +503,61 @@ export default function LearningTreePage() {
             disabled={genLoading}
             className="mt-2 text-xs text-brand-300 hover:underline disabled:opacity-50"
           >
-            {genLoading ? "Working…" : "✨ Improve tree — suggest missing topics"}
+            {genLoading ? "Analysing tree…" : "✨ Improve tree — suggest missing topics"}
           </button>
+        )}
+
+        {/* Proposal review panel */}
+        {proposals && (
+          <div className="mt-3 rounded-xl border border-white/10 bg-slate-900/60 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-200">
+                {proposals.length} suggested addition{proposals.length !== 1 ? "s" : ""} — toggle to accept
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setAccepted(new Set(proposals.map((_, i) => i)))} className="text-xs text-brand-300 hover:underline">All</button>
+                <button onClick={() => setAccepted(new Set())} className="text-xs text-slate-400 hover:underline">None</button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+              {proposals.map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => setAccepted((prev) => { const next = new Set(prev); if (next.has(i)) next.delete(i); else next.add(i); return next; })}
+                  className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${accepted.has(i) ? "border-brand-500/50 bg-brand-500/10 text-white" : "border-white/5 bg-slate-800/40 text-slate-400"}`}
+                >
+                  <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${accepted.has(i) ? "border-brand-400 bg-brand-500 text-white" : "border-slate-600"}`}>
+                    {accepted.has(i) ? "✓" : ""}
+                  </span>
+                  <span>
+                    <span className="font-medium">{p.title}</span>
+                    {p.parentTitle && <span className="ml-1 text-slate-500">under {p.parentTitle}</span>}
+                    {p.children.length > 0 && <span className="ml-1 text-slate-500">(+{p.children.length} sub-topics)</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => {
+                  const toApply = proposals.filter((_, i) => accepted.has(i));
+                  if (toApply.length) applyTreeProposals(toApply);
+                  setProposals(null);
+                  setAccepted(new Set());
+                }}
+                disabled={accepted.size === 0}
+                className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-40"
+              >
+                Add {accepted.size} selected
+              </button>
+              <button
+                onClick={() => { setProposals(null); setAccepted(new Set()); }}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
 
         {genError && (

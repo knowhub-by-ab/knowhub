@@ -326,9 +326,8 @@ export default function SettingsPage() {
                 ))}
               </select>
             </label>
-            {!isPuter && (
-              <label className="text-xs font-medium text-slate-300">
-                API key
+            <label className="text-xs font-medium text-slate-300">
+                {isPuter ? "Puter API Token" : "API key"}
                 <input
                   type="password"
                   value={apiKey}
@@ -337,13 +336,11 @@ export default function SettingsPage() {
                   className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
                 />
               </label>
-            )}
           </div>
 
           {isPuter && (
             <p className="mt-2 rounded-lg border border-brand-500/20 bg-brand-500/10 px-3 py-2 text-xs text-brand-200">
-              Puter.js is free and keyless — no API key needed. It calls AI directly from
-              your browser using Puter's free quota.
+              Get your free Puter API token at puter.com → Account → API Keys. The same token works for both AI and TTS/MP3 download.
             </p>
           )}
 

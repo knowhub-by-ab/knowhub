@@ -329,12 +329,19 @@ export async function generateQuizFromPages(
   return quizzes.add(title, questions).id;
 }
 
-/** Improve tree: propose missing/trending topics to add. Returns count of nodes created. */
-export async function improveTree(
+export interface TreeProposal {
+  parentId: string | null;
+  parentTitle: string | null;
+  title: string;
+  children: string[];
+}
+
+/** Propose missing topics — returns proposals WITHOUT applying them. User accepts/rejects each. */
+export async function proposeTreeImprovements(
   keys: ProviderKey[],
   nodes: AppData["nodes"],
   topic: string
-): Promise<number> {
+): Promise<TreeProposal[]> {
   const outline = nodes.length
     ? tree
         .flatten(nodes)
@@ -357,27 +364,49 @@ export async function improveTree(
     },
   ];
 
-  interface Addition {
-    parentId?: string | null;
-    title: string;
-    children?: { title: string }[];
-  }
+  interface Addition { parentId?: string | null; title: string; children?: { title: string }[]; }
   const data = await chatJSON<{ additions?: Addition[] }>(keys, messages, "tree");
   const additions = data.additions ?? [];
   if (!additions.length) throw new Error("No improvements suggested.");
 
+  const nodeMap = new Map(nodes.map((n) => [n.id, n.title]));
   const valid = new Set(nodes.map((n) => n.id));
+
+  return additions
+    .filter((a) => a?.title)
+    .map((a) => {
+      const pid = a.parentId && valid.has(a.parentId) ? a.parentId : null;
+      return {
+        parentId: pid,
+        parentTitle: pid ? (nodeMap.get(pid) ?? null) : null,
+        title: String(a.title).slice(0, 120),
+        children: (a.children ?? []).filter((c) => c?.title).map((c) => String(c.title).slice(0, 120)),
+      };
+    });
+}
+
+/** Apply a list of accepted proposals to the tree. Returns count of nodes created. */
+export function applyTreeProposals(proposals: TreeProposal[]): number {
   let count = 0;
-  for (const a of additions) {
-    if (!a?.title) continue;
-    const pid = a.parentId && valid.has(a.parentId) ? a.parentId : null;
-    const id = tree.add(String(a.title).slice(0, 120), pid).id;
+  for (const p of proposals) {
+    const id = tree.add(p.title, p.parentId).id;
     count++;
-    for (const c of a.children ?? []) {
-      if (c?.title) { tree.add(String(c.title).slice(0, 120), id); count++; }
+    for (const child of p.children) {
+      tree.add(child, id);
+      count++;
     }
   }
   return count;
+}
+
+/** @deprecated Use proposeTreeImprovements + applyTreeProposals instead. */
+export async function improveTree(
+  keys: ProviderKey[],
+  nodes: AppData["nodes"],
+  topic: string
+): Promise<number> {
+  const proposals = await proposeTreeImprovements(keys, nodes, topic);
+  return applyTreeProposals(proposals);
 }
 
 /** Generate flashcards from source text. Returns added flashcards. */
