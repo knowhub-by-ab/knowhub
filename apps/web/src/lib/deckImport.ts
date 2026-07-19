@@ -47,15 +47,30 @@ function extractParagraphs(bodyXml: string): string[] {
   return result;
 }
 
+// Matches both <p:txBody> (slide XML) and <a:txBody> (notes/other XML).
+// PPTX slides use the presentation namespace (p:) for text bodies; the inner
+// paragraph and run elements (<a:p>, <a:r>, <a:t>) always use the drawing namespace.
+const TX_BODY_RE = /<[pa]:txBody>([\s\S]*?)<\/[pa]:txBody>/g;
+
+function nextTxBodyEnd(xml: string, fromIdx: number): number {
+  const pEnd = xml.indexOf("</p:txBody>", fromIdx);
+  const aEnd = xml.indexOf("</a:txBody>", fromIdx);
+  if (pEnd === -1 && aEnd === -1) return -1;
+  if (pEnd === -1) return aEnd;
+  if (aEnd === -1) return pEnd;
+  return Math.min(pEnd, aEnd);
+}
+
 // ── Title extraction — multi-strategy ──
 function extractTitleFromXml(slideXml: string, layoutXml?: string): string {
   // Strategy 1: find type="title"|"ctrTitle" ph → get its txBody text
+  // Works in both slide XML (p:txBody) and layout XML (p:txBody)
   const titleRe = /\btype=["'](?:title|ctrTitle)["']/i;
   function titleFromPhSource(xml: string): string {
     const m = titleRe.exec(xml);
     if (!m) return "";
     const after = xml.slice(m.index);
-    const tbEnd = after.indexOf("</a:txBody>");
+    const tbEnd = nextTxBodyEnd(after, 0);
     if (tbEnd === -1) return "";
     return extractAtText(after.slice(0, tbEnd));
   }
@@ -76,12 +91,15 @@ function extractTitleFromXml(slideXml: string, layoutXml?: string): string {
   }
 
   // Strategy 3: first non-metadata txBody text in the slide
+  // Also try layout as fallback
   const skipPh = /\btype=["'](?:dt|sldNum|ftr)["']/i;
-  for (const txm of slideXml.matchAll(/<a:txBody>([\s\S]*?)<\/a:txBody>/g)) {
-    const before = slideXml.slice(Math.max(0, txm.index! - 400), txm.index!);
-    if (skipPh.test(before)) continue;
-    const text = extractAtText(txm[1]);
-    if (text) return text;
+  for (const src of layoutXml ? [slideXml, layoutXml] : [slideXml]) {
+    for (const txm of src.matchAll(TX_BODY_RE)) {
+      const before = src.slice(Math.max(0, txm.index! - 400), txm.index!);
+      if (skipPh.test(before)) continue;
+      const text = extractAtText(txm[1]);
+      if (text) return text;
+    }
   }
 
   return "";
@@ -98,17 +116,20 @@ function extractBulletsFromXml(slideXml: string, titleText: string): string[] {
   const titlePhM = /\btype=["'](?:title|ctrTitle)["']/i.exec(slideXml);
   if (titlePhM) {
     const afterPh  = slideXml.slice(titlePhM.index);
-    const tbEndOff = afterPh.indexOf("</a:txBody>");
+    const tbEndOff = nextTxBodyEnd(afterPh, 0);
     if (tbEndOff !== -1) {
-      const tbStartOff = afterPh.lastIndexOf("<a:txBody>", tbEndOff);
+      // Find the opening tag (either namespace)
+      const pStart = afterPh.lastIndexOf("<p:txBody>", tbEndOff);
+      const aStart = afterPh.lastIndexOf("<a:txBody>", tbEndOff);
+      const tbStartOff = Math.max(pStart, aStart);
       if (tbStartOff !== -1) {
         titleTbStart = titlePhM.index + tbStartOff;
-        titleTbEnd   = titlePhM.index + tbEndOff + "</a:txBody>".length;
+        titleTbEnd   = titlePhM.index + tbEndOff + "</p:txBody>".length;
       }
     }
   }
 
-  for (const txm of slideXml.matchAll(/<a:txBody>([\s\S]*?)<\/a:txBody>/g)) {
+  for (const txm of slideXml.matchAll(TX_BODY_RE)) {
     const start = txm.index!;
     const end   = start + txm[0].length;
     // Skip title txBody by position
@@ -246,10 +267,25 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
     let layoutXml: string | undefined;
     const rels0 = slideRels[slideNum] ?? {};
     for (const target of Object.values(rels0)) {
-      if (target.includes("slideLayout")) {
-        const layoutPath = "ppt/slides/" + target.replace("../", "");
-        const altLayoutPath = "ppt/slideLayouts/" + target.replace("../slideLayouts/", "");
-        const lf = zip.file(layoutPath) ?? zip.file(altLayoutPath);
+      if (/slideLayout/i.test(target)) {
+        // Resolve relative path: "../slideLayouts/slideLayout1.xml" → "ppt/slideLayouts/slideLayout1.xml"
+        const normalised = target.replace(/^\.\.\//, "");
+        const candidates = [
+          "ppt/slides/" + normalised,
+          "ppt/" + normalised,
+          "ppt/slideLayouts/" + normalised.replace(/^slideLayouts\//i, ""),
+        ];
+        // Case-insensitive fallback: find any zip entry whose lowercase path matches
+        const allEntries = Object.keys(zip.files);
+        let lf = candidates.reduce<ReturnType<typeof zip.file>>(
+          (found, p) => found ?? zip.file(p),
+          null as ReturnType<typeof zip.file>
+        );
+        if (!lf) {
+          const lower = candidates.map(p => p.toLowerCase());
+          const match = allEntries.find(e => lower.includes(e.toLowerCase()));
+          if (match) lf = zip.file(match);
+        }
         if (lf) { layoutXml = await lf.async("text"); break; }
       }
     }
@@ -260,13 +296,20 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
 
     // Debug: log to console so devtools shows what was found
     if (i < 3) {
-      const firstPH  = slideXml.indexOf("<p:ph");
-      const firstAT  = slideXml.indexOf("<a:t>");
-      const cSldName = slideXml.match(/<p:cSld\b[^>]*\bname=["']([^"']+)["']/i)?.[1] ?? "(none)";
-      console.log(`[PPTX] slide${slideNum}: title="${titleText}" bullets=${bullets.length} xmlLen=${slideXml.length} cSldName="${cSldName}"`);
-      console.log(`[PPTX] slide${slideNum} firstPH@${firstPH}:`, firstPH >= 0 ? slideXml.slice(firstPH, firstPH + 150) : "NONE");
-      console.log(`[PPTX] slide${slideNum} firstAT@${firstAT}:`, firstAT >= 0 ? slideXml.slice(Math.max(0, firstAT - 80), firstAT + 80) : "NONE");
-      if (slideXml.length < 1500) console.log(`[PPTX] slide${slideNum} FULL:`, slideXml);
+      const firstPH   = slideXml.indexOf("<p:ph");
+      const firstAT   = slideXml.indexOf("<a:t>");
+      const firstPTxB = slideXml.indexOf("<p:txBody>");
+      const cSldName  = slideXml.match(/<p:cSld\b[^>]*\bname=["']([^"']+)["']/i)?.[1] ?? "(none)";
+      console.log(`[PPTX] slide${slideNum}: title="${titleText}" bullets=${bullets.length} xmlLen=${slideXml.length} layoutLen=${layoutXml?.length ?? 0} cSldName="${cSldName}"`);
+      console.log(`[PPTX] slide${slideNum} firstPH@${firstPH} firstAT@${firstAT} firstPTxBody@${firstPTxB}`);
+      if (firstPH >= 0) console.log(`[PPTX] slide${slideNum} ph:`, slideXml.slice(firstPH, firstPH + 200));
+      if (firstAT >= 0) console.log(`[PPTX] slide${slideNum} at:`, slideXml.slice(Math.max(0, firstAT - 80), firstAT + 80));
+      if (slideXml.length < 1500) console.log(`[PPTX] slide${slideNum} FULL-SLIDE:`, slideXml);
+      if (layoutXml && layoutXml.length < 3000) console.log(`[PPTX] slide${slideNum} FULL-LAYOUT:`, layoutXml);
+      else if (layoutXml) {
+        const layoutAT = layoutXml.indexOf("<a:t>");
+        console.log(`[PPTX] slide${slideNum} layout firstAT@${layoutAT}:`, layoutAT >= 0 ? layoutXml.slice(Math.max(0, layoutAT - 80), layoutAT + 150) : "NONE");
+      }
     }
 
     // Detect type
