@@ -47,13 +47,11 @@ function extractParagraphs(bodyXml: string): string[] {
   return result;
 }
 
-// ── Positional title extraction: does NOT depend on <p:sp> block parsing ──
-// Searches for type="title"|"ctrTitle" by position, then grabs text from
-// the <a:txBody> that follows. Avoids all <p:sp> regex fragility.
+// ── Title extraction — multi-strategy ──
 function extractTitleFromXml(slideXml: string, layoutXml?: string): string {
+  // Strategy 1: find type="title"|"ctrTitle" ph → get its txBody text
   const titleRe = /\btype=["'](?:title|ctrTitle)["']/i;
-
-  function titleFromSource(xml: string): string {
+  function titleFromPhSource(xml: string): string {
     const m = titleRe.exec(xml);
     if (!m) return "";
     const after = xml.slice(m.index);
@@ -62,10 +60,30 @@ function extractTitleFromXml(slideXml: string, layoutXml?: string): string {
     return extractAtText(after.slice(0, tbEnd));
   }
 
-  const fromSlide = titleFromSource(slideXml);
+  const fromSlide = titleFromPhSource(slideXml);
   if (fromSlide) return fromSlide;
-  // Fallback: title text inherited from slide layout
-  if (layoutXml) return titleFromSource(layoutXml);
+  if (layoutXml) {
+    const fromLayout = titleFromPhSource(layoutXml);
+    if (fromLayout) return fromLayout;
+  }
+
+  // Strategy 2: read <p:cSld name="..."> — PowerPoint sets this to the slide title
+  const nameM = slideXml.match(/<p:cSld\b[^>]*\bname=["']([^"']+)["']/i);
+  if (nameM) {
+    const n = decodeXmlEntities(nameM[1]).trim();
+    // Skip generic names like "Slide 1", "Slide1", "slide 1" — only use if meaningful
+    if (n && !/^slide\s*\d+$/i.test(n)) return n;
+  }
+
+  // Strategy 3: first non-metadata txBody text in the slide
+  const skipPh = /\btype=["'](?:dt|sldNum|ftr)["']/i;
+  for (const txm of slideXml.matchAll(/<a:txBody>([\s\S]*?)<\/a:txBody>/g)) {
+    const before = slideXml.slice(Math.max(0, txm.index! - 400), txm.index!);
+    if (skipPh.test(before)) continue;
+    const text = extractAtText(txm[1]);
+    if (text) return text;
+  }
+
   return "";
 }
 
@@ -242,8 +260,13 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
 
     // Debug: log to console so devtools shows what was found
     if (i < 3) {
-      console.log(`[PPTX] slide${slideNum}: title="${titleText}" bullets=${bullets.length} xmlLen=${slideXml.length}`);
-      console.log(`[PPTX] slide${slideNum} xml[0:300]:`, slideXml.slice(0, 300));
+      const firstPH  = slideXml.indexOf("<p:ph");
+      const firstAT  = slideXml.indexOf("<a:t>");
+      const cSldName = slideXml.match(/<p:cSld\b[^>]*\bname=["']([^"']+)["']/i)?.[1] ?? "(none)";
+      console.log(`[PPTX] slide${slideNum}: title="${titleText}" bullets=${bullets.length} xmlLen=${slideXml.length} cSldName="${cSldName}"`);
+      console.log(`[PPTX] slide${slideNum} firstPH@${firstPH}:`, firstPH >= 0 ? slideXml.slice(firstPH, firstPH + 150) : "NONE");
+      console.log(`[PPTX] slide${slideNum} firstAT@${firstAT}:`, firstAT >= 0 ? slideXml.slice(Math.max(0, firstAT - 80), firstAT + 80) : "NONE");
+      if (slideXml.length < 1500) console.log(`[PPTX] slide${slideNum} FULL:`, slideXml);
     }
 
     // Detect type
