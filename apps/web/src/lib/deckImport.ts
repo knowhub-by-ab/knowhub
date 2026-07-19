@@ -275,18 +275,19 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
           "ppt/" + normalised,
           "ppt/slideLayouts/" + normalised.replace(/^slideLayouts\//i, ""),
         ];
-        // Case-insensitive fallback: find any zip entry whose lowercase path matches
-        const allEntries = Object.keys(zip.files);
-        let lf = candidates.reduce<ReturnType<typeof zip.file>>(
-          (found, p) => found ?? zip.file(p),
-          null as ReturnType<typeof zip.file>
-        );
-        if (!lf) {
-          const lower = candidates.map(p => p.toLowerCase());
-          const match = allEntries.find(e => lower.includes(e.toLowerCase()));
-          if (match) lf = zip.file(match);
+        // Try each candidate path, then fall back to case-insensitive search
+        let lfPath: string | undefined;
+        for (const p of candidates) {
+          if (zip.file(p)) { lfPath = p; break; }
         }
-        if (lf) { layoutXml = await lf.async("text"); break; }
+        if (!lfPath) {
+          const lower = candidates.map(p => p.toLowerCase());
+          lfPath = Object.keys(zip.files).find(e => lower.includes(e.toLowerCase()));
+        }
+        if (lfPath) {
+          const lf = zip.file(lfPath);
+          if (lf) { layoutXml = await lf.async("text"); break; }
+        }
       }
     }
 
