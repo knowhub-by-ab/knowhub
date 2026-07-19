@@ -26,9 +26,10 @@ interface Props {
   imageStyle: ImageStyle;
   onImageChange: (img: SlideImage | undefined) => void;
   onPromptChange: (prompt: string) => void;
+  onImageStyleChange?: (style: ImageStyle) => void;
 }
 
-export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChange, onPromptChange }: Props) {
+export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChange, onPromptChange, onImageStyleChange }: Props) {
   const [activeSource, setActiveSource] = useState<ImageSource>(image?.source ?? "pollinations");
   const [searchResults, setSearchResults] = useState<{ url: string; title?: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -193,6 +194,22 @@ export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChan
           ))}
         </div>
       </div>
+
+      {/* Per-slide image style override */}
+      {onImageStyleChange && (
+        <div>
+          <label className="text-xs text-zinc-400 mb-1 block">Style (this slide)</label>
+          <select
+            value={imageStyle}
+            onChange={(e) => onImageStyleChange(e.target.value as ImageStyle)}
+            className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200"
+          >
+            {(["illustration", "photorealistic", "minimal", "flat-icon", "none"] as ImageStyle[]).map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }

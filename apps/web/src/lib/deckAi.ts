@@ -176,23 +176,70 @@ export async function generateFrontmatterFromContent(
   keys: ProviderKey[],
   markdown: string
 ): Promise<Partial<DeckFrontmatter>> {
-  const systemPrompt = `Analyse the provided Markdown and suggest presentation settings.
-Return ONLY valid JSON with these optional fields:
-{"theme":"aurora-dark"|"corporate-blue"|"edu-warm"|"minimal-white"|"tech-green"|"sunset-orange"|"ocean-teal"|"slate-pro",
- "audienceLevel":"beginner"|"intermediate"|"expert",
- "imageStyle":"photorealistic"|"illustration"|"minimal"|"flat-icon"|"none",
- "slideCount":number,
- "narrationTone":"formal"|"conversational"|"enthusiastic"}`;
+  const systemPrompt = `You are a presentation designer. Analyse the provided Markdown and suggest presentation settings.
+
+IMPORTANT: Look for explicit design intent in the text body itself — phrases like "use a dark theme", "professional corporate style", "blue colour scheme", "minimalist design", "warm and friendly", "technical/developer audience" etc. These design instructions in the text should take priority over generic content analysis.
+
+Return ONLY valid JSON (no prose, no code fences) with these optional fields:
+{
+  "theme": "aurora-dark"|"corporate-blue"|"edu-warm"|"minimal-white"|"tech-green"|"sunset-orange"|"ocean-teal"|"slate-pro",
+  "audienceLevel": "beginner"|"intermediate"|"expert",
+  "imageStyle": "photorealistic"|"illustration"|"minimal"|"flat-icon"|"none",
+  "slideCount": number,
+  "narrationTone": "formal"|"conversational"|"enthusiastic"
+}
+
+Theme guide:
+- aurora-dark: dark/night, vibrant/creative, tech-forward
+- corporate-blue: professional, business, formal
+- edu-warm: educational, warm, friendly, beginner-friendly
+- minimal-white: clean, simple, minimal, modern
+- tech-green: technology, developer, coding, green/neon
+- sunset-orange: energetic, creative, marketing
+- ocean-teal: calm, health, nature, wellness
+- slate-pro: professional dark, executive, sophisticated`;
 
   const { content } = await chatCompletion(keys, [
     { role: "system", content: systemPrompt },
-    { role: "user", content: markdown.slice(0, 3000) },
+    { role: "user", content: markdown.slice(0, 4000) },
   ]);
   try {
     return extractJson<Partial<DeckFrontmatter>>(content);
   } catch {
     return {};
   }
+}
+
+// ---------------------------------------------------------------------------
+// Convert raw learning page content to MD authoring guide format
+// ---------------------------------------------------------------------------
+
+export async function convertPageToMdGuide(
+  keys: ProviderKey[],
+  rawContent: string,
+  pageTitle: string
+): Promise<string> {
+  const systemPrompt = `You are an expert instructional designer. Convert the provided raw learning page content into a structured KnowHub Markdown authoring guide format suitable for generating a presentation.
+
+Output format rules:
+- Use # for the main title
+- Use ## for major sections (each becomes a slide)
+- Use ### for subsections
+- Add <!-- image-prompt: a specific visual description --> after each ## heading where an image would help
+- Add <!-- speaker-notes: key talking points for the presenter --> after the image-prompt where helpful
+- Restructure content into clear bullet points under each section
+- Keep bullet points concise (max 12 words each, max 6 per section)
+- Add a closing section at the end with key takeaways
+- Do NOT add YAML frontmatter — just the structured markdown
+- Preserve the educational intent and all key information from the original content
+
+Return ONLY the formatted Markdown, nothing else.`;
+
+  const { content } = await chatCompletion(keys, [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: `Page title: "${pageTitle}"\n\nContent:\n${rawContent.slice(0, 8000)}` },
+  ]);
+  return content.trim();
 }
 
 // ---------------------------------------------------------------------------

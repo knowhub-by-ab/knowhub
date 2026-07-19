@@ -41,8 +41,8 @@ export async function exportPptx(deck: PresentationDeck): Promise<void> {
   const theme = THEMES[deck.frontmatter.theme] ?? THEMES["aurora-dark"];
   const accentHex = (deck.frontmatter.accentColor ?? theme.accent).replace("#", "");
   const bgHex = theme.bg.replace("#", "");
-  const titleHex = theme.titleColor.replace("#", "");
-  const bodyHex = theme.bodyColor.replace("#", "");
+  const titleHex = (deck.frontmatter.titleColor ?? theme.titleColor).replace("#", "");
+  const bodyHex = (deck.frontmatter.bodyColor ?? theme.bodyColor).replace("#", "");
   const fontFace = deck.frontmatter.font ?? theme.font;
 
   prs.layout = "LAYOUT_WIDE"; // 13.33" x 7.5"

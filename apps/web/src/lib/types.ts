@@ -252,6 +252,8 @@ export interface Slide {
   narrationScript: string;
   /** AI-suggested image prompt; user may edit before fetching. */
   imagePrompt: string;
+  /** Per-slide image style override; overrides DeckFrontmatter.imageStyle when set. */
+  imageStyle?: ImageStyle;
   image?: SlideImage;
   /** Reference to a Question id in the existing QuestionBank, for quiz slides. */
   quizQuestionId?: string;
@@ -275,6 +277,10 @@ export type ImageStyle = "photorealistic" | "illustration" | "minimal" | "flat-i
 export interface DeckFrontmatter {
   theme: SlideTheme;
   accentColor?: string;
+  /** Override text color for slide titles (hex). */
+  titleColor?: string;
+  /** Override text color for body/bullet text (hex). */
+  bodyColor?: string;
   font?: string;
   imageStyle: ImageStyle;
   slideCount?: number;

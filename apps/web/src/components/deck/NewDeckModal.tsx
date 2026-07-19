@@ -50,6 +50,16 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
         rawMd = pages[selectedNodeId] ?? "";
         const node = nodes.find((n) => n.id === selectedNodeId);
         if (!deckTitle) deckTitle = node?.title ?? "Untitled";
+        // Convert raw page content to structured MD authoring guide format
+        if (aiKeys.length > 0 && rawMd.trim()) {
+          setProgress("Structuring content into MD guide format…");
+          try {
+            const { convertPageToMdGuide } = await import("@/lib/deckAi");
+            rawMd = await convertPageToMdGuide(aiKeys, rawMd, deckTitle);
+          } catch {
+            // Non-fatal — use raw content as fallback
+          }
+        }
       } else if (mode === "upload") {
         rawMd = uploadedMd;
         if (!deckTitle) deckTitle = uploadedName.replace(/\.md$/i, "");
@@ -113,7 +123,7 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
             slide.imagePrompt = explicitPrompt;
             slide.image = {
               source: "pollinations",
-              url: pollinationsUrl(explicitPrompt, 800, 450, baseFm.imageStyle ?? "illustration"),
+              url: pollinationsUrl(explicitPrompt, 800, 450, slide.imageStyle ?? baseFm.imageStyle ?? "illustration"),
               prompt: explicitPrompt,
               layout: "right-half",
             };
@@ -123,7 +133,7 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
             slide.imagePrompt = autoPrompt;
             slide.image = {
               source: "pollinations",
-              url: pollinationsUrl(autoPrompt, 800, 450, baseFm.imageStyle ?? "illustration"),
+              url: pollinationsUrl(autoPrompt, 800, 450, slide.imageStyle ?? baseFm.imageStyle ?? "illustration"),
               prompt: autoPrompt,
               layout: "right-half",
             };

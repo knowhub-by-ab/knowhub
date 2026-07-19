@@ -181,9 +181,10 @@ export default function SlideCard({
                 <ImagePanel
                   image={slide.image}
                   imagePrompt={slide.imagePrompt}
-                  imageStyle={frontmatter.imageStyle}
+                  imageStyle={slide.imageStyle ?? frontmatter.imageStyle}
                   onImageChange={(img) => onChange({ image: img })}
                   onPromptChange={(prompt) => onChange({ imagePrompt: prompt })}
+                  onImageStyleChange={(style) => onChange({ imageStyle: style })}
                 />
               </div>
             )}

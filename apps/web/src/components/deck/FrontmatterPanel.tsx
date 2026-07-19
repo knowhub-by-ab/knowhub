@@ -45,15 +45,38 @@ export default function FrontmatterPanel({ frontmatter, onChange }: Props) {
               </button>
             </div>
 
-            {/* Accent colour */}
+            {/* Colours */}
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Accent Colour</label>
-              <input
-                type="color"
-                value={frontmatter.accentColor ?? "#6366f1"}
-                onChange={(e) => onChange({ accentColor: e.target.value })}
-                className="w-full h-9 rounded border border-zinc-700 cursor-pointer bg-zinc-800"
-              />
+              <label className="block text-xs text-zinc-400 mb-2">Colours</label>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Accent</label>
+                  <input
+                    type="color"
+                    value={frontmatter.accentColor ?? "#6366f1"}
+                    onChange={(e) => onChange({ accentColor: e.target.value })}
+                    className="w-full h-8 rounded border border-zinc-700 cursor-pointer bg-zinc-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Title text</label>
+                  <input
+                    type="color"
+                    value={frontmatter.titleColor ?? "#ffffff"}
+                    onChange={(e) => onChange({ titleColor: e.target.value })}
+                    className="w-full h-8 rounded border border-zinc-700 cursor-pointer bg-zinc-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Body text</label>
+                  <input
+                    type="color"
+                    value={frontmatter.bodyColor ?? "#cccccc"}
+                    onChange={(e) => onChange({ bodyColor: e.target.value })}
+                    className="w-full h-8 rounded border border-zinc-700 cursor-pointer bg-zinc-800"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Font */}

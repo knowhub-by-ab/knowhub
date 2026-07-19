@@ -42,38 +42,40 @@ function extractParagraphs(spXml: string): string[] {
   return result;
 }
 
-// Find a <p:sp> that has a placeholder of the given type/idx
-function findPlaceholder(slideXml: string, ...types: string[]): string | null {
-  // Match each <p:sp>...</p:sp> block
-  for (const spMatch of slideXml.matchAll(/<p:sp>([\s\S]*?)<\/p:sp>/g)) {
-    const spXml = spMatch[0];
-    const phMatch = spXml.match(/<p:ph([^/]*?)\/?>/);
-    if (!phMatch) continue;
-    const phAttr = phMatch[1];
-    for (const type of types) {
-      if (type.startsWith("idx:")) {
-        if (phAttr.includes(`idx="${type.slice(4)}"`)) return spXml;
-      } else {
-        if (phAttr.includes(`type="${type}"`)) return spXml;
-      }
-    }
-  }
-  return null;
+// Extract title text using positional search — more robust than <p:sp> block regex
+function extractSlideTitle(slideXml: string): string {
+  const titlePhIdx = slideXml.search(/<p:ph\b[^>]*\btype=["'](?:title|ctrTitle)["'][^>]*\/?>/i);
+  if (titlePhIdx === -1) return "";
+  const after = slideXml.slice(titlePhIdx);
+  const txBodyMatch = after.match(/<a:txBody>([\s\S]*?)<\/a:txBody>/);
+  if (!txBodyMatch) return "";
+  return extractParagraphs(txBodyMatch[1]).join(" ").trim();
 }
 
-// Extract all body/content placeholder text (non-title placeholders)
+// Extract bullet/body text, skipping title and metadata placeholders
 function extractBodyBullets(slideXml: string, titleText: string): string[] {
+  // Find the title txBody range so we can skip it
+  const titlePhIdx = slideXml.search(/<p:ph\b[^>]*\btype=["'](?:title|ctrTitle)["'][^>]*\/?>/i);
+  let titleTbStart = -1;
+  let titleTbEnd = -1;
+  if (titlePhIdx >= 0) {
+    const txm = slideXml.slice(titlePhIdx).match(/<a:txBody>([\s\S]*?)<\/a:txBody>/);
+    if (txm) {
+      titleTbStart = titlePhIdx + txm.index!;
+      titleTbEnd = titleTbStart + txm[0].length;
+    }
+  }
+
   const bullets: string[] = [];
-  for (const spMatch of slideXml.matchAll(/<p:sp>([\s\S]*?)<\/p:sp>/g)) {
-    const spXml = spMatch[0];
-    const phMatch = spXml.match(/<p:ph([^/]*?)\/?>/);
-    if (!phMatch) continue;
-    const phAttr = phMatch[1];
-    // Skip title/ctrTitle placeholders
-    if (phAttr.includes('type="title"') || phAttr.includes('type="ctrTitle"')) continue;
-    // Include body, idx=1, idx=2, dt, ftr — everything with text
-    const paras = extractParagraphs(spXml).filter(p => p !== titleText);
-    bullets.push(...paras);
+  for (const txm of slideXml.matchAll(/<a:txBody>([\s\S]*?)<\/a:txBody>/g)) {
+    const start = txm.index!;
+    // Skip the title txBody
+    if (titleTbStart >= 0 && start >= titleTbStart && start < titleTbEnd) continue;
+    // Skip date/slidenum/footer placeholders — look in the 400 chars before this txBody
+    const before = slideXml.slice(Math.max(0, start - 400), start);
+    if (/<p:ph\b[^>]*\btype=["'](?:dt|sldNum|ftr)["']/i.test(before)) continue;
+    const lines = extractParagraphs(txm[1]).filter(l => l !== titleText);
+    bullets.push(...lines);
   }
   return bullets;
 }
@@ -199,12 +201,7 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
     const slideNum = slideFileNames[i].match(/slide(\d+)/i)?.[1] ?? String(i + 1);
 
     // Extract title
-    let titleText = `Slide ${i + 1}`;
-    const titleSp = findPlaceholder(slideXml, "title", "ctrTitle");
-    if (titleSp) {
-      const paras = extractParagraphs(titleSp);
-      if (paras.length > 0) titleText = paras[0];
-    }
+    let titleText = extractSlideTitle(slideXml) || `Slide ${i + 1}`;
 
     // Extract bullets/body
     const bullets = extractBodyBullets(slideXml, titleText);
