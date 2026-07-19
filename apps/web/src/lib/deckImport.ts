@@ -334,6 +334,52 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
       }
     }
 
+    // Detect image-only slides: <p:pic> with an embedded blip but no text at all.
+    // These are slides where the entire content is a full-slide inserted picture
+    // (e.g. screenshots). Extract the image so it renders as the slide background.
+    let embeddedImage: Slide["image"] | undefined;
+    const isImageOnly = !slideXml.includes("<a:t>") && slideXml.includes("<p:pic>");
+    if (isImageOnly) {
+      const blipM = slideXml.match(/<a:blip\b[^>]*\br:embed="([^"]+)"/);
+      if (blipM) {
+        const rIdPic = blipM[1];
+        const picTarget = rels[rIdPic];
+        if (picTarget) {
+          const normalised = picTarget.replace(/^\.\.\//, "");
+          const mediaCandidates = [
+            "ppt/slides/" + normalised,
+            "ppt/" + normalised,
+          ];
+          let mediaPath: string | undefined;
+          for (const p of mediaCandidates) {
+            if (zip.file(p)) { mediaPath = p; break; }
+          }
+          if (!mediaPath) {
+            const lc = mediaCandidates.map(p => p.toLowerCase());
+            mediaPath = Object.keys(zip.files).find(e => lc.includes(e.toLowerCase()));
+          }
+          if (mediaPath) {
+            const mf = zip.file(mediaPath);
+            if (mf) {
+              const b64 = await mf.async("base64");
+              const ext = mediaPath.split(".").pop()?.toLowerCase() ?? "png";
+              const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg"
+                : ext === "gif" ? "image/gif"
+                : ext === "webp" ? "image/webp"
+                : "image/png";
+              embeddedImage = {
+                source: "local",
+                dataUrl: `data:${mime};base64,${b64}`,
+                layout: "full-background",
+                objectFit: "contain",
+                altText: titleText,
+              };
+            }
+          }
+        }
+      }
+    }
+
     slides.push({
       id: uid(),
       type,
@@ -342,6 +388,7 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
       speakerNotes,
       narrationScript: "",
       imagePrompt: `${titleText}${bullets[0] ? ": " + bullets[0] : ""}`,
+      ...(embeddedImage ? { image: embeddedImage } : {}),
       order: i,
     });
   }
