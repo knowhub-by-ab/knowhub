@@ -42,39 +42,45 @@ function extractParagraphs(spXml: string): string[] {
   return result;
 }
 
-// Extract title text using positional search — more robust than <p:sp> block regex
-function extractSlideTitle(slideXml: string): string {
-  const titlePhIdx = slideXml.search(/<p:ph\b[^>]*\btype=["'](?:title|ctrTitle)["'][^>]*\/?>/i);
-  if (titlePhIdx === -1) return "";
-  const after = slideXml.slice(titlePhIdx);
-  const txBodyMatch = after.match(/<a:txBody>([\s\S]*?)<\/a:txBody>/);
-  if (!txBodyMatch) return "";
-  return extractParagraphs(txBodyMatch[1]).join(" ").trim();
+interface ShapeInfo {
+  phType: string; // "title" | "ctrTitle" | "body" | "dt" | "sldNum" | "ftr" | "none"
+  text: string;
 }
 
-// Extract bullet/body text, skipping title and metadata placeholders
-function extractBodyBullets(slideXml: string, titleText: string): string[] {
-  // Find the title txBody range so we can skip it
-  const titlePhIdx = slideXml.search(/<p:ph\b[^>]*\btype=["'](?:title|ctrTitle)["'][^>]*\/?>/i);
-  let titleTbStart = -1;
-  let titleTbEnd = -1;
-  if (titlePhIdx >= 0) {
-    const txm = slideXml.slice(titlePhIdx).match(/<a:txBody>([\s\S]*?)<\/a:txBody>/);
-    if (txm) {
-      titleTbStart = titlePhIdx + txm.index!;
-      titleTbEnd = titleTbStart + txm[0].length;
-    }
+// Parse all shapes, handling <p:sp> tags with or without attributes
+function parseSlideShapes(slideXml: string): ShapeInfo[] {
+  const shapes: ShapeInfo[] = [];
+  for (const spMatch of slideXml.matchAll(/<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g)) {
+    const spXml = spMatch[0];
+    const phMatch = spXml.match(/<p:ph\b([^>]*?)\/?>/);
+    const phAttrs = phMatch?.[1] ?? "";
+    const phTypeMatch = phAttrs.match(/\btype=["']([^"']+)["']/);
+    const phType = phTypeMatch?.[1] ?? (phMatch ? "body" : "none");
+    const txBodyMatch = spXml.match(/<a:txBody>([\s\S]*?)<\/a:txBody>/);
+    const text = txBodyMatch ? extractParagraphs(txBodyMatch[1]).join("\n").trim() : "";
+    if (text || phMatch) shapes.push({ phType, text });
   }
+  return shapes;
+}
 
+function getTitleFromShapes(shapes: ShapeInfo[]): string {
+  // Priority 1: explicit title/ctrTitle placeholder
+  const ts = shapes.find(s => s.phType === "title" || s.phType === "ctrTitle");
+  if (ts?.text) return ts.text.split("\n")[0].trim();
+  // Priority 2: first non-metadata shape with text (free text boxes)
+  for (const s of shapes) {
+    if (s.phType === "dt" || s.phType === "sldNum" || s.phType === "ftr") continue;
+    if (s.text) return s.text.split("\n")[0].trim();
+  }
+  return "";
+}
+
+function getBulletsFromShapes(shapes: ShapeInfo[], titleText: string): string[] {
   const bullets: string[] = [];
-  for (const txm of slideXml.matchAll(/<a:txBody>([\s\S]*?)<\/a:txBody>/g)) {
-    const start = txm.index!;
-    // Skip the title txBody
-    if (titleTbStart >= 0 && start >= titleTbStart && start < titleTbEnd) continue;
-    // Skip date/slidenum/footer placeholders — look in the 400 chars before this txBody
-    const before = slideXml.slice(Math.max(0, start - 400), start);
-    if (/<p:ph\b[^>]*\btype=["'](?:dt|sldNum|ftr)["']/i.test(before)) continue;
-    const lines = extractParagraphs(txm[1]).filter(l => l !== titleText);
+  for (const s of shapes) {
+    if (s.phType === "title" || s.phType === "ctrTitle") continue;
+    if (s.phType === "dt" || s.phType === "sldNum" || s.phType === "ftr") continue;
+    const lines = s.text.split("\n").map(l => l.trim()).filter(l => l && l !== titleText);
     bullets.push(...lines);
   }
   return bullets;
@@ -200,11 +206,10 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
     const slideXml = await slideFile.async("text");
     const slideNum = slideFileNames[i].match(/slide(\d+)/i)?.[1] ?? String(i + 1);
 
-    // Extract title
-    let titleText = extractSlideTitle(slideXml) || `Slide ${i + 1}`;
-
-    // Extract bullets/body
-    const bullets = extractBodyBullets(slideXml, titleText);
+    // Parse all shapes first (handles <p:sp> with or without XML attributes)
+    const shapes = parseSlideShapes(slideXml);
+    let titleText = getTitleFromShapes(shapes) || `Slide ${i + 1}`;
+    const bullets = getBulletsFromShapes(shapes, titleText);
 
     // Detect type
     let type: Slide["type"] = "content";

@@ -222,6 +222,7 @@ export type SlideType = "title" | "content" | "section" | "quiz" | "closing";
 export type ImageLayout =
   | "full-background"
   | "right-half"
+  | "left-half"
   | "top-banner"
   | "inline-below-title"
   | "bottom-strip"
@@ -239,6 +240,10 @@ export interface SlideImage {
   dataUrl?: string;
   layout: ImageLayout;
   altText?: string;
+  /** Aspect ratio for AI-generated images. Default "16:9". */
+  imageRatio?: "16:9" | "4:3" | "1:1" | "3:2" | "2:3" | "9:16";
+  /** Whether to crop to fill (cover) or fit without cropping (contain). Default "cover". */
+  objectFit?: "cover" | "contain";
 }
 
 export interface Slide {

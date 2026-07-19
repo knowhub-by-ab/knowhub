@@ -18,7 +18,8 @@ export function pollinationsUrl(
   prompt: string,
   width = 800,
   height = 450,
-  style: "photorealistic" | "illustration" | "minimal" | "flat-icon" | "none" = "illustration"
+  style: "photorealistic" | "illustration" | "minimal" | "flat-icon" | "none" = "illustration",
+  ratio?: "16:9" | "4:3" | "1:1" | "3:2" | "2:3" | "9:16"
 ): string {
   const styleHint: Record<string, string> = {
     photorealistic: "photorealistic, high quality, professional photograph",
@@ -27,6 +28,18 @@ export function pollinationsUrl(
     "flat-icon": "flat icon style, vector, simple shapes",
     none: "",
   };
+  // Override dimensions from ratio if provided
+  if (ratio) {
+    const RATIO_DIMS: Record<string, [number, number]> = {
+      "16:9": [1280, 720],
+      "4:3":  [800,  600],
+      "1:1":  [512,  512],
+      "3:2":  [768,  512],
+      "2:3":  [512,  768],
+      "9:16": [450,  800],
+    };
+    [width, height] = RATIO_DIMS[ratio] ?? [width, height];
+  }
   const hint = styleHint[style] ?? "";
   const fullPrompt = hint ? `${prompt}, ${hint}` : prompt;
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=${width}&height=${height}&nologo=true`;
@@ -36,9 +49,10 @@ export async function fetchPollinationsImage(
   prompt: string,
   width = 800,
   height = 450,
-  style: "photorealistic" | "illustration" | "minimal" | "flat-icon" | "none" = "illustration"
+  style: "photorealistic" | "illustration" | "minimal" | "flat-icon" | "none" = "illustration",
+  ratio?: "16:9" | "4:3" | "1:1" | "3:2" | "2:3" | "9:16"
 ): Promise<ImageResult> {
-  const url = pollinationsUrl(prompt, width, height, style);
+  const url = pollinationsUrl(prompt, width, height, style, ratio);
   // Pollinations returns the image directly at the URL — no need to await a JSON response.
   // We return the URL immediately; the browser fetches it lazily when rendered.
   return { url, credit: "Pollinations AI (free)" };
@@ -128,6 +142,7 @@ export function isImageFileTooLarge(file: File): boolean {
 export type ImageLayout =
   | "full-background"
   | "right-half"
+  | "left-half"
   | "top-banner"
   | "inline-below-title"
   | "bottom-strip"
@@ -147,6 +162,11 @@ export const LAYOUT_STYLES: Record<ImageLayout, LayoutStyle> = {
   },
   "right-half": {
     containerClass: "flex gap-4",
+    imageClass: "w-2/5 object-cover rounded",
+    contentClass: "w-3/5",
+  },
+  "left-half": {
+    containerClass: "flex flex-row-reverse gap-4",
     imageClass: "w-2/5 object-cover rounded",
     contentClass: "w-3/5",
   },

@@ -14,6 +14,7 @@ import {
 const LAYOUT_OPTIONS: { value: ImageLayout; label: string }[] = [
   { value: "none", label: "None" },
   { value: "right-half", label: "Right Half" },
+  { value: "left-half", label: "Left Half" },
   { value: "full-background", label: "Full Background" },
   { value: "top-banner", label: "Top Banner" },
   { value: "inline-below-title", label: "Below Title" },
@@ -45,8 +46,8 @@ export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChan
     setSearchResults([]);
     try {
       if (activeSource === "pollinations") {
-        const result = await fetchPollinationsImage(imagePrompt, 800, 450, imageStyle);
-        onImageChange({ source: "pollinations", url: result.url, prompt: imagePrompt, layout: currentLayout });
+        const result = await fetchPollinationsImage(imagePrompt, 800, 450, imageStyle, image?.imageRatio);
+        onImageChange({ source: "pollinations", url: result.url, prompt: imagePrompt, layout: currentLayout, imageRatio: image?.imageRatio, objectFit: image?.objectFit });
       } else if (activeSource === "svgrepo") {
         const results = await searchSvgRepo(imagePrompt);
         setSearchResults(results.map((r) => ({ url: r.url, title: r.title })));
@@ -210,6 +211,36 @@ export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChan
           </select>
         </div>
       )}
+
+      {/* Aspect ratio for AI images */}
+      <div>
+        <label className="text-xs text-zinc-400 mb-1 block">AI Image Ratio</label>
+        <select
+          value={image?.imageRatio ?? "16:9"}
+          onChange={(e) => {
+            const ratio = e.target.value as NonNullable<SlideImage["imageRatio"]>;
+            onImageChange(image ? { ...image, imageRatio: ratio } : undefined);
+          }}
+          className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200"
+        >
+          {(["16:9", "4:3", "1:1", "3:2", "2:3", "9:16"] as const).map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Crop vs contain */}
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={(image?.objectFit ?? "cover") === "contain"}
+          onChange={(e) => {
+            onImageChange(image ? { ...image, objectFit: e.target.checked ? "contain" : "cover" } : undefined);
+          }}
+          className="accent-indigo-500"
+        />
+        <span className="text-xs text-zinc-300">Fit without cropping</span>
+      </label>
     </div>
   );
 }

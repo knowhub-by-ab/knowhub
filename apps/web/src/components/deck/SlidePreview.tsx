@@ -54,8 +54,7 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
   }
 
   const contentStyle: React.CSSProperties = {
-    flex: layout === "right-half" ? "0 0 58%" : "1",
-    paddingRight: layout === "right-half" ? 0 : 0,
+    flex: (layout === "right-half" || layout === "left-half") ? "0 0 58%" : "1",
   };
 
   return (
@@ -69,7 +68,7 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
           src={imgSrc}
           alt={slide.image?.altText ?? ""}
           crossOrigin="anonymous"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.25 }}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: slide.image?.objectFit ?? "cover", opacity: 0.25 }}
         />
       )}
 
@@ -77,10 +76,16 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
         {/* Top banner image */}
         {hasImage && layout === "top-banner" && (
           <img src={imgSrc} alt={slide.image?.altText ?? ""} crossOrigin="anonymous"
-            style={{ width: "100%", height: "18%", objectFit: "cover", borderRadius: 4, marginBottom: 8 }} />
+            style={{ width: "100%", height: "18%", objectFit: slide.image?.objectFit ?? "cover", borderRadius: 4, marginBottom: 8 }} />
         )}
 
         <div style={{ display: "flex", flex: 1, gap: 12, minHeight: 0 }}>
+          {/* Left-half image (appears before content) */}
+          {hasImage && layout === "left-half" && (
+            <img src={imgSrc} alt={slide.image?.altText ?? ""} crossOrigin="anonymous"
+              style={{ flex: "0 0 40%", objectFit: slide.image?.objectFit ?? "cover", borderRadius: 4 }} />
+          )}
+
           <div style={contentStyle}>
             {/* Title */}
             <div style={{ fontSize: "1.25em", fontWeight: 700, color: t.titleColor, marginBottom: 6 }}>
@@ -92,7 +97,7 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
             {/* Inline below title image */}
             {hasImage && layout === "inline-below-title" && (
               <img src={imgSrc} alt={slide.image?.altText ?? ""} crossOrigin="anonymous"
-                style={{ width: "100%", height: "28%", objectFit: "cover", borderRadius: 4, marginBottom: 8 }} />
+                style={{ width: "100%", height: "28%", objectFit: slide.image?.objectFit ?? "cover", borderRadius: 4, marginBottom: 8 }} />
             )}
 
             {/* Bullets */}
@@ -105,17 +110,17 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
             </ul>
           </div>
 
-          {/* Right-half image */}
+          {/* Right-half image (appears after content) */}
           {hasImage && layout === "right-half" && (
             <img src={imgSrc} alt={slide.image?.altText ?? ""} crossOrigin="anonymous"
-              style={{ flex: "0 0 40%", objectFit: "cover", borderRadius: 4 }} />
+              style={{ flex: "0 0 40%", objectFit: slide.image?.objectFit ?? "cover", borderRadius: 4 }} />
           )}
         </div>
 
         {/* Bottom strip image */}
         {hasImage && layout === "bottom-strip" && (
           <img src={imgSrc} alt={slide.image?.altText ?? ""} crossOrigin="anonymous"
-            style={{ width: "100%", height: "18%", objectFit: "cover", borderRadius: 4, marginTop: 8 }} />
+            style={{ width: "100%", height: "18%", objectFit: slide.image?.objectFit ?? "cover", borderRadius: 4, marginTop: 8 }} />
         )}
       </div>
 
