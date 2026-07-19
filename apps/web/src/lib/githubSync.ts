@@ -1,5 +1,6 @@
-import { ensureRepo, importFromRepo, syncToRepo } from "./github";
+import { ensureRepo, importFromRepo, syncToRepo, syncDecksToRepo, importDecksFromRepoFile } from "./github";
 import { getState, replaceAll, setGithub } from "./store";
+import { getDeckStoreState, importDecksFromGitHub } from "./deckStore";
 
 // Shared "sync to GitHub now" action used by the Repository page and the global
 // top-bar Sync button. Bidirectional: push local changes first (delta), then
@@ -16,6 +17,9 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
   // 1. Push — delta only (unchanged files are skipped)
   onProgress?.("Pushing local changes…");
   await syncToRepo(gh.token, gh.login, repo, getState(), onProgress);
+
+  // 1b. Push presentations (separate file, same delta logic)
+  await syncDecksToRepo(gh.token, gh.login, repo, getDeckStoreState(), onProgress);
 
   // 2. Pull — fetch remote snapshot and merge missing items into local state
   onProgress?.("Pulling remote changes…");
@@ -42,6 +46,13 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
       chatFolders: mergeById(local.chatFolders ?? [], remote.chatFolders ?? []),
     });
     onProgress?.("Merge complete.");
+  }
+
+  // 2b. Pull presentations and merge (last-write-wins by updatedAt)
+  const remoteDecks = await importDecksFromRepoFile(gh.token, gh.login, repo);
+  if (remoteDecks) {
+    importDecksFromGitHub({ decks: remoteDecks.decks, collections: remoteDecks.collections });
+    onProgress?.("Presentations merged.");
   }
 
   setGithub({ lastSync: Date.now() });

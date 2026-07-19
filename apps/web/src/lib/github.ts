@@ -1,4 +1,4 @@
-import type { AppData, ReleaseAsset, AssetsRelease } from "./types";
+import type { AppData, ReleaseAsset, AssetsRelease, PresentationDeck, Collection } from "./types";
 
 // Minimal GitHub REST client used directly from the browser (api.github.com
 // supports CORS with a bearer token). Powers the Repository module: connect a
@@ -412,4 +412,71 @@ export async function importFromRepo(
   const text = await getFileText(token, owner, repo, "knowhub.json");
   if (!text) return null;
   return JSON.parse(text) as KnowHubExport;
+}
+
+// ---------------------------------------------------------------------------
+// Deck store sync — stored in knowhub-decks.json, separate from knowhub.json
+// so presentations don't bloat the main snapshot.
+// ---------------------------------------------------------------------------
+
+export interface DecksExport {
+  version: 1;
+  exportedAt: string;
+  decks: PresentationDeck[];
+  collections: Collection[];
+}
+
+/** Strip base64 dataUrls — local images are device-only and can't be shared. */
+function stripLocalImages(decks: PresentationDeck[]): PresentationDeck[] {
+  return decks.map((deck) => ({
+    ...deck,
+    slides: deck.slides.map((slide) => {
+      if (!slide.image?.dataUrl) return slide;
+      // Keep external url if available; drop the base64 blob
+      const { dataUrl: _dropped, ...rest } = slide.image;
+      return { ...slide, image: rest.url ? rest : undefined };
+    }),
+  }));
+}
+
+/** Push the deck store to knowhub-decks.json (delta — skips if unchanged). */
+export async function syncDecksToRepo(
+  token: string,
+  owner: string,
+  repo: string,
+  deckState: { decks: PresentationDeck[]; collections: Collection[] },
+  onProgress?: (msg: string) => void
+): Promise<void> {
+  if (!deckState.decks.length && !deckState.collections.length) return;
+  const hashes = loadHashes();
+  const path = "knowhub-decks.json";
+  const exportData: DecksExport = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    decks: stripLocalImages(deckState.decks),
+    collections: deckState.collections,
+  };
+  const json = JSON.stringify(exportData, null, 2);
+  const h = quickHash(json);
+  if (hashes[path] !== h) {
+    onProgress?.("Pushing presentations…");
+    await putFile(token, owner, repo, path, json, `knowhub: sync presentations ${new Date().toISOString()}`);
+    hashes[path] = h;
+    saveHashes(hashes);
+  }
+}
+
+/** Pull knowhub-decks.json from the repo. Returns null if file doesn't exist yet. */
+export async function importDecksFromRepoFile(
+  token: string,
+  owner: string,
+  repo: string
+): Promise<DecksExport | null> {
+  const text = await getFileText(token, owner, repo, "knowhub-decks.json");
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed.version !== 1) return null;
+    return parsed as DecksExport;
+  } catch { return null; }
 }

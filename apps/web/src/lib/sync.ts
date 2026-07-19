@@ -87,6 +87,15 @@ export function initSync(): void {
         import("./githubSync").then(({ syncGithubNow }) => {
           syncGithubNow().catch(() => {});
         });
+      } else if (nowHasGithub) {
+        // Already had GitHub — auto-sync if content is stale (>15 min since last sync)
+        const AUTO_SYNC_MS = 15 * 60 * 1000;
+        const lastSync = getState().github?.lastSync ?? 0;
+        if (Date.now() - lastSync > AUTO_SYNC_MS) {
+          import("./githubSync").then(({ syncGithubNow }) => {
+            syncGithubNow().catch(() => {});
+          });
+        }
       }
     } catch {
       // offline / rules — keep working locally; writer retries on change.
@@ -103,7 +112,16 @@ export function initSync(): void {
     stopSnapshot = onSnapshot(ref, (snap) => {
       if (snap.metadata.hasPendingWrites) return; // ignore our own writes
       const d = snap.data() as { data?: LightData | AppData; updatedAt?: number } | undefined;
-      if (d) applyIfNewer(d.data, d.updatedAt ?? 0);
+      if (!d) return;
+      const localLastSync = getState().github?.lastSync ?? 0;
+      applyIfNewer(d.data, d.updatedAt ?? 0);
+      // If another device recently synced to GitHub (newer lastSync), pull here too
+      const remoteLastSync = (d.data as AppData)?.github?.lastSync ?? 0;
+      if (remoteLastSync > localLastSync && getState().github?.token) {
+        import("./githubSync").then(({ syncGithubNow }) => {
+          syncGithubNow().catch(() => {});
+        });
+      }
     });
   });
 }
