@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Upload, Loader2, X } from "lucide-react";
 import type { TreeNode } from "@/lib/types";
+import type { DeckFrontmatter } from "@/lib/types";
 import { decks as deckOps } from "@/lib/deckStore";
 import { parseMdDirectives, generateSlideOutline, generateFrontmatterFromContent } from "@/lib/deckAi";
 import { DEFAULT_FRONTMATTER } from "@/lib/deckStore";
@@ -29,6 +30,9 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadedMd, setUploadedMd] = useState("");
   const [uploadedName, setUploadedName] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateFm, setTemplateFm] = useState<Partial<DeckFrontmatter>>({});
+  const templateRef = useRef<HTMLInputElement>(null);
 
   const nodesWithPages = nodes.filter((n) => pages[n.id]?.trim());
 
@@ -76,7 +80,7 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
 
       // Parse directives from the MD
       const directives = parseMdDirectives(rawMd);
-      const baseFm = { ...DEFAULT_FRONTMATTER, ...directives.frontmatter };
+      const baseFm = { ...DEFAULT_FRONTMATTER, ...templateFm, ...directives.frontmatter };
 
       // AI-infer frontmatter from content if not fully specified in YAML
       setProgress("Analysing content…");
@@ -139,6 +143,31 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
     } finally {
       setGenerating(false);
       setProgress("");
+    }
+  }
+
+  async function handleTemplateUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    try {
+      const { extractTemplateTheme } = await import("@/lib/deckImport");
+      const colors = await extractTemplateTheme(file);
+      if (colors) {
+        // Pick theme based on bg luminance
+        const hex = colors.bg.replace("#", "");
+        const r = parseInt(hex.slice(0, 2) || "0", 16);
+        const g = parseInt(hex.slice(2, 4) || "0", 16);
+        const b = parseInt(hex.slice(4, 6) || "0", 16);
+        const lum = (r * 299 + g * 587 + b * 114) / 1000;
+        const theme: DeckFrontmatter["theme"] = lum < 128 ? "aurora-dark" : "minimal-white";
+        setTemplateFm({ theme, accentColor: colors.accent });
+        setTemplateName(file.name);
+      } else {
+        alert("Could not extract theme from this file. It may not contain a standard OOXML theme.");
+      }
+    } catch (err) {
+      alert(`Failed to read template: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -237,6 +266,29 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
               <p className="text-xs text-zinc-500 mt-1">Use the raw file URL (GitHub: click Raw button, then copy URL).</p>
             </div>
           )}
+
+          {/* Template upload */}
+          <div className="border border-zinc-700 rounded-lg p-3 bg-zinc-800/50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-zinc-300">Theme template (optional)</span>
+              {templateName && (
+                <button onClick={() => { setTemplateName(""); setTemplateFm({}); }} className="text-xs text-zinc-500 hover:text-red-400">Remove</button>
+              )}
+            </div>
+            {templateName ? (
+              <p className="text-xs text-emerald-400">✓ {templateName} — theme colors extracted</p>
+            ) : (
+              <>
+                <input ref={templateRef} type="file" accept=".pptx,.potx" className="hidden" onChange={handleTemplateUpload} />
+                <button
+                  onClick={() => templateRef.current?.click()}
+                  className="flex items-center gap-2 text-xs text-zinc-400 hover:text-indigo-400 transition-colors"
+                >
+                  <Upload size={13} /> Upload .pptx / .potx to use its theme colors
+                </button>
+              </>
+            )}
+          </div>
 
           {/* Title override */}
           <div>

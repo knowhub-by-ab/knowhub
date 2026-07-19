@@ -1,8 +1,8 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Presentation, FolderOpen, Trash2, Play,
-  Download, Search,
+  Download, Search, Upload,
 } from "lucide-react";
 
 const MdGuidePage = lazy(() => import("@/pages/MdGuidePage"));
@@ -24,6 +24,7 @@ export default function PresentationsPage() {
   const [sort, setSort] = useState<SortKey>("newest");
   const [showNew, setShowNew] = useState(false);
   const [, setDeletingId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [showNewCollection, setShowNewCollection] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState<CollectionType>("folder");
@@ -52,6 +53,24 @@ export default function PresentationsPage() {
     await exportPptx(deck);
   }
 
+  async function handleImportPptx(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    try {
+      const { importPptxFile } = await import("@/lib/deckImport");
+      const imported = await importPptxFile(file);
+      const deck = deckOps.create(imported.title, undefined, undefined);
+      if (Object.keys(imported.frontmatter).length > 0) {
+        deckOps.updateFrontmatter(deck.id, imported.frontmatter);
+      }
+      deckOps.setSlides(deck.id, imported.slides);
+      navigate(`/app/presentations/${deck.id}`);
+    } catch (err) {
+      alert(`Failed to import PPTX: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   function handleCreateCollection() {
     if (!newColName.trim()) return;
     colOps.create(newColName, newColType);
@@ -68,6 +87,13 @@ export default function PresentationsPage() {
           <h1 className="text-xl font-semibold">Presentations</h1>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 transition-colors"
+          >
+            <Upload size={14} /> Import PPTX
+          </button>
+          <input ref={fileRef} type="file" accept=".pptx,.potx,.ppt" className="hidden" onChange={handleImportPptx} />
           <button
             onClick={() => setShowNew(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white transition-colors"
