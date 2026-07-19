@@ -274,6 +274,7 @@ export default function DeckEditorPage() {
         onVideo={() => setShowVideo(true)}
         onSaveToGitHub={github?.token ? handleSaveToGitHub : undefined}
         isSaving={isSaving}
+        onTitleChange={(newTitle) => deckOps.update(deck.id, { title: newTitle })}
       />
 
       {/* Error banner */}
@@ -415,7 +416,8 @@ const TRANSLATE_LANGS = [
   { code: "es", label: "Spanish" }, { code: "fr", label: "French" },
   { code: "de", label: "German" }, { code: "pt", label: "Portuguese" },
   { code: "hi", label: "Hindi" }, { code: "zh", label: "Chinese" },
-  { code: "ar", label: "Arabic" }, { code: "ja", label: "Japanese" },
+  { code: "ar", label: "Arabic" }, { code: "bn", label: "Bengali" },
+  { code: "ko", label: "Korean" }, { code: "ja", label: "Japanese" },
 ];
 
 function TranslateButton({ onTranslate }: { onTranslate: (lang: string) => void }) {

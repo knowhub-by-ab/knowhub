@@ -48,6 +48,7 @@ export default function VideoExportModal({ deck, onClose, onSaveToGitHub }: Prop
   const filename = `${deck.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.webm`;
 
   async function handleRequestAudio() {
+    setAudioGranted(null);
     const stream = await requestSystemAudio();
     if (stream) {
       setAudioStream(stream);
@@ -230,7 +231,7 @@ export default function VideoExportModal({ deck, onClose, onSaveToGitHub }: Prop
                   <MonitorSpeaker size={15} className="text-indigo-400" /> Capture system audio (recommended)
                 </div>
                 <p className="text-xs text-zinc-400">
-                  Click below → browser asks you to share a tab → choose any tab → KnowHub captures the audio automatically.
+                  Click below → a screen/tab picker appears → select any tab (make sure 'Share audio' checkbox is enabled in the dialog) → KnowHub captures the audio as the TTS plays.
                   No quiet room required — audio plays and records in real time.
                 </p>
                 {audioGranted === null && (
@@ -331,6 +332,10 @@ export default function VideoExportModal({ deck, onClose, onSaveToGitHub }: Prop
                   </button>
                 </div>
               </div>
+
+              <p className="text-xs text-zinc-500 bg-zinc-800/60 rounded px-3 py-2 leading-relaxed">
+                <strong className="text-zinc-400">Note:</strong> WebM plays in Chrome, Firefox, and Edge. For MP4 (iPhone/wider compatibility), use any free online WebM→MP4 converter such as CloudConvert, FreeConvert, or HandBrake.
+              </p>
 
               {result.chapters.length > 0 && (
                 <details className="text-xs">

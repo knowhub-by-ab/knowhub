@@ -14,11 +14,14 @@ interface Props {
   onSaveToGitHub?: () => Promise<void>;
   onShareUrl?: () => void;
   isSaving?: boolean;
+  onTitleChange?: (newTitle: string) => void;
 }
 
-export default function DeckToolbar({ deck, onBack, onPresent, onVideo, onSaveToGitHub, onShareUrl, isSaving }: Props) {
+export default function DeckToolbar({ deck, onBack, onPresent, onVideo, onSaveToGitHub, onShareUrl, isSaving, onTitleChange }: Props) {
   const [exportingPptx, setExportingPptx] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(deck.title);
 
   async function handlePptx() {
     setExportingPptx(true);
@@ -57,7 +60,24 @@ export default function DeckToolbar({ deck, onBack, onPresent, onVideo, onSaveTo
         Back
       </button>
 
-      <span className="text-zinc-200 font-medium text-sm flex-1 truncate min-w-0">{deck.title}</span>
+      {editingTitle ? (
+        <input
+          autoFocus
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onBlur={() => { onTitleChange?.(titleDraft.trim() || deck.title); setEditingTitle(false); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { onTitleChange?.(titleDraft.trim() || deck.title); setEditingTitle(false); } if (e.key === "Escape") { setTitleDraft(deck.title); setEditingTitle(false); } }}
+          className="flex-1 min-w-0 bg-zinc-800 border border-indigo-500 rounded px-2 py-0.5 text-sm text-zinc-100 focus:outline-none"
+        />
+      ) : (
+        <button
+          onClick={() => { setTitleDraft(deck.title); setEditingTitle(true); }}
+          className="text-zinc-200 font-medium text-sm flex-1 truncate min-w-0 text-left hover:text-white transition-colors"
+          title="Click to rename"
+        >
+          {deck.title}
+        </button>
+      )}
 
       {/* Primary actions */}
       <button

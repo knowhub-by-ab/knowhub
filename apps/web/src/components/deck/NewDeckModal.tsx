@@ -5,6 +5,7 @@ import { decks as deckOps } from "@/lib/deckStore";
 import { parseMdDirectives, generateSlideOutline, generateFrontmatterFromContent } from "@/lib/deckAi";
 import { DEFAULT_FRONTMATTER } from "@/lib/deckStore";
 import { useAppData } from "@/lib/store";
+import { pollinationsUrl } from "@/lib/deckImages";
 
 type InputMode = "page" | "upload" | "paste" | "url";
 
@@ -50,14 +51,20 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
         if (!deckTitle) deckTitle = uploadedName.replace(/\.md$/i, "");
       } else if (mode === "paste") {
         rawMd = pastedMd;
-        if (!deckTitle) deckTitle = "Pasted Markdown";
+        if (!deckTitle) {
+          const h = rawMd.match(/^#\s+(.+)/m);
+          deckTitle = h ? h[1].trim() : "Untitled Presentation";
+        }
       } else if (mode === "url") {
         if (!urlInput.trim()) { setError("Enter a URL."); setGenerating(false); return; }
         setProgress("Fetching markdown…");
         try {
           const res = await fetch(urlInput.trim());
           rawMd = await res.text();
-          if (!deckTitle) deckTitle = urlInput.split("/").pop() ?? "Fetched Markdown";
+          if (!deckTitle) {
+            const h = rawMd.match(/^#\s+(.+)/m);
+            deckTitle = h ? h[1].trim() : (urlInput.split("/").pop() ?? "Fetched URL");
+          }
         } catch {
           setError("Failed to fetch URL. Make sure it's a public raw Markdown URL.");
           setGenerating(false);
@@ -92,10 +99,36 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
         const slides = await generateSlideOutline(aiKeys, rawMd, baseFm);
         // Apply narration overrides and image prompts from directives
         for (const slide of slides) {
+          // Apply narration override from MD directive
           const narr = directives.narrationOverrides[slide.title];
           if (narr) slide.narrationScript = narr;
-          const imgPrompt = directives.imagePrompts[slide.title];
-          if (imgPrompt) slide.imagePrompt = imgPrompt;
+
+          // Apply explicit image prompt from MD directive
+          const explicitPrompt = directives.imagePrompts[slide.title];
+          if (explicitPrompt) {
+            slide.imagePrompt = explicitPrompt;
+            slide.image = {
+              source: "pollinations",
+              url: pollinationsUrl(explicitPrompt, 800, 450, baseFm.imageStyle ?? "illustration"),
+              prompt: explicitPrompt,
+              layout: "right-half",
+            };
+          } else if (slide.type === "content" && slide.bullets?.length > 0) {
+            // Auto-generate image for content slides that have no explicit prompt
+            const autoPrompt = `${slide.title}: ${slide.bullets[0]}`;
+            slide.imagePrompt = autoPrompt;
+            slide.image = {
+              source: "pollinations",
+              url: pollinationsUrl(autoPrompt, 800, 450, baseFm.imageStyle ?? "illustration"),
+              prompt: autoPrompt,
+              layout: "right-half",
+            };
+          }
+
+          // Apply quiz slide marker
+          if (directives.quizSlides.includes(slide.title)) {
+            slide.type = "quiz";
+          }
         }
         deckOps.setSlides(deck.id, slides);
       }

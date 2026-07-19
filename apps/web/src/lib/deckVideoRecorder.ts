@@ -39,15 +39,18 @@ export interface ChapterMarker {
 
 export async function requestSystemAudio(): Promise<MediaStream | null> {
   try {
-    // Tab/system audio capture — user must share a tab with audio
+    // Chrome requires video:true in getDisplayMedia — we request minimal video
+    // and immediately stop those tracks so only audio remains.
     const stream = await (navigator.mediaDevices as any).getDisplayMedia({
-      video: false,
+      video: { width: 1, height: 1, frameRate: 1 },
       audio: {
         echoCancellation: false,
         noiseSuppression: false,
         sampleRate: 44100,
       },
     });
+    // Stop video tracks — we only need audio
+    stream.getVideoTracks().forEach((t: MediaStreamTrack) => t.stop());
     return stream;
   } catch {
     return null;

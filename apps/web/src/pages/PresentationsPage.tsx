@@ -1,16 +1,18 @@
-import { useState, useRef } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Presentation, FolderOpen, Trash2, Play,
-  Download, Upload, Search,
+  Download, Search,
 } from "lucide-react";
+
+const MdGuidePage = lazy(() => import("@/pages/MdGuidePage"));
 import { useDeckStore, decks as deckOps, collections as colOps } from "@/lib/deckStore";
 import type { PresentationDeck, Collection, CollectionType } from "@/lib/deckStore";
 import { useAppData } from "@/lib/store";
 import { exportPptx, THEMES } from "@/lib/deckExport";
 import NewDeckModal from "@/components/deck/NewDeckModal";
 
-type Tab = "decks" | "collections";
+type Tab = "decks" | "collections" | "guide";
 type SortKey = "newest" | "oldest" | "title";
 
 export default function PresentationsPage() {
@@ -25,7 +27,6 @@ export default function PresentationsPage() {
   const [showNewCollection, setShowNewCollection] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState<CollectionType>("folder");
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // Sort + filter decks
   const filteredDecks = decks
@@ -51,10 +52,6 @@ export default function PresentationsPage() {
     await exportPptx(deck);
   }
 
-  function handleImportPptx(_e: React.ChangeEvent<HTMLInputElement>) {
-    alert("PPTX import from file coming soon. For now, create a new presentation from Markdown.");
-  }
-
   function handleCreateCollection() {
     if (!newColName.trim()) return;
     colOps.create(newColName, newColType);
@@ -72,13 +69,6 @@ export default function PresentationsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-300 transition-colors"
-          >
-            <Upload size={14} /> Import PPTX
-          </button>
-          <input ref={fileRef} type="file" accept=".pptx" className="hidden" onChange={handleImportPptx} />
-          <button
             onClick={() => setShowNew(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white transition-colors"
           >
@@ -89,17 +79,24 @@ export default function PresentationsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 px-6 pt-3">
-        {(["decks", "collections"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 text-sm rounded-lg capitalize transition-colors ${
-              tab === t ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            {t === "decks" ? `Presentations (${decks.length})` : `Collections (${collections.length})`}
-          </button>
-        ))}
+        <button
+          onClick={() => setTab("decks")}
+          className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${tab === "decks" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+        >
+          Presentations ({decks.length})
+        </button>
+        <button
+          onClick={() => setTab("collections")}
+          className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${tab === "collections" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+        >
+          Collections ({collections.length})
+        </button>
+        <button
+          onClick={() => setTab("guide")}
+          className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${tab === "guide" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+        >
+          MD Guide
+        </button>
       </div>
 
       {/* Controls */}
@@ -137,6 +134,14 @@ export default function PresentationsPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 pb-6">
+        {tab === "guide" && (
+          <div className="flex-1 overflow-y-auto">
+            <Suspense fallback={<div className="p-8 text-zinc-500 text-sm">Loading guide…</div>}>
+              <MdGuidePage />
+            </Suspense>
+          </div>
+        )}
+
         {tab === "decks" && (
           filteredDecks.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-zinc-500">

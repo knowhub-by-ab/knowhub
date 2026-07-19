@@ -169,15 +169,6 @@ export const MODULES: ModuleDef[] = [
     prdRef: "Feature-PPT",
   },
   {
-    id: "md-guide",
-    label: "MD Authoring Guide",
-    path: "/app/md-guide",
-    icon: BookOpen,
-    summary: "How to write Markdown files that become great presentations",
-    prdRef: "Feature-MDGuide",
-    tags: ["markdown", "guide", "presentation"],
-  },
-  {
     id: "guide",
     label: "KnowHub Guide",
     path: "/app/guide",
