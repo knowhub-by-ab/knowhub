@@ -20,6 +20,8 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
   const hasImage = !!(slide.image?.url || slide.image?.dataUrl);
   const imgSrc = slide.image?.dataUrl ?? slide.image?.url ?? "";
   const layout = slide.image?.layout ?? "none";
+  // Image-only slide: imported picture that IS the slide — render it raw at full opacity.
+  const isImageOnly = hasImage && layout === "full-background" && slide.image?.source === "local" && !!slide.image?.dataUrl && slide.bullets.length === 0;
 
   const baseStyle: React.CSSProperties = {
     backgroundColor: t.bg,
@@ -31,6 +33,20 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
     transform: scale !== 1 ? `scale(${scale})` : undefined,
     transformOrigin: "top left",
   };
+
+  // Image-only: render the picture as the entire slide, no text overlay.
+  if (isImageOnly) {
+    return (
+      <div style={{ ...baseStyle, backgroundColor: "#000" }} className={`rounded select-none ${className}`}>
+        <img
+          src={imgSrc}
+          alt={slide.image?.altText ?? ""}
+          crossOrigin="anonymous"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: slide.image?.objectFit ?? "contain" }}
+        />
+      </div>
+    );
+  }
 
   if (isTitle || isSection) {
     return (
@@ -68,7 +84,7 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
           src={imgSrc}
           alt={slide.image?.altText ?? ""}
           crossOrigin="anonymous"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: slide.image?.objectFit ?? "cover", opacity: 0.25 }}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: slide.image?.objectFit ?? "cover", opacity: 0.6 }}
         />
       )}
 

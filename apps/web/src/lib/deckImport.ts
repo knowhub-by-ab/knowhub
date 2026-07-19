@@ -292,7 +292,10 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
     }
 
     // Extract title using positional approach (no <p:sp> block parsing)
-    let titleText = extractTitleFromXml(slideXml, layoutXml) || `Slide ${i + 1}`;
+    // For image-only slides with no text, use the presentation title + slide number.
+    const isImageOnlySlide = !slideXml.includes("<a:t>") && slideXml.includes("<p:pic>");
+    let titleText = extractTitleFromXml(slideXml, layoutXml)
+      || (isImageOnlySlide ? `${presentationTitle} — ${i + 1}` : `Slide ${i + 1}`);
     const bullets = extractBulletsFromXml(slideXml, titleText);
 
     // Debug: log to console so devtools shows what was found
