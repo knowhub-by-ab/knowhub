@@ -27,60 +27,78 @@ function decodeXmlEntities(s: string): string {
     .replace(/&apos;/g, "'");
 }
 
-// Extract all text from a <p:sp> XML block, grouped by paragraph
-function extractParagraphs(spXml: string): string[] {
+// Collect all <a:t> text from an XML fragment
+function extractAtText(xml: string): string {
+  const texts: string[] = [];
+  for (const m of xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g)) {
+    const t = decodeXmlEntities(m[1]).trim();
+    if (t) texts.push(t);
+  }
+  return texts.join("").trim();
+}
+
+// Extract text grouped by paragraph (for bullets)
+function extractParagraphs(bodyXml: string): string[] {
   const result: string[] = [];
-  for (const paraMatch of spXml.matchAll(/<a:p>([\s\S]*?)<\/a:p>/g)) {
-    const texts: string[] = [];
-    for (const tMatch of paraMatch[1].matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g)) {
-      const t = decodeXmlEntities(tMatch[1]).trim();
-      if (t) texts.push(t);
-    }
-    const line = texts.join("").trim();
+  for (const paraMatch of bodyXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)) {
+    const line = extractAtText(paraMatch[1]);
     if (line) result.push(line);
   }
   return result;
 }
 
-interface ShapeInfo {
-  phType: string; // "title" | "ctrTitle" | "body" | "dt" | "sldNum" | "ftr" | "none"
-  text: string;
-}
+// ── Positional title extraction: does NOT depend on <p:sp> block parsing ──
+// Searches for type="title"|"ctrTitle" by position, then grabs text from
+// the <a:txBody> that follows. Avoids all <p:sp> regex fragility.
+function extractTitleFromXml(slideXml: string, layoutXml?: string): string {
+  const titleRe = /\btype=["'](?:title|ctrTitle)["']/i;
 
-// Parse all shapes, handling <p:sp> tags with or without attributes
-function parseSlideShapes(slideXml: string): ShapeInfo[] {
-  const shapes: ShapeInfo[] = [];
-  for (const spMatch of slideXml.matchAll(/<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g)) {
-    const spXml = spMatch[0];
-    const phMatch = spXml.match(/<p:ph\b([^>]*?)\/?>/);
-    const phAttrs = phMatch?.[1] ?? "";
-    const phTypeMatch = phAttrs.match(/\btype=["']([^"']+)["']/);
-    const phType = phTypeMatch?.[1] ?? (phMatch ? "body" : "none");
-    const txBodyMatch = spXml.match(/<a:txBody>([\s\S]*?)<\/a:txBody>/);
-    const text = txBodyMatch ? extractParagraphs(txBodyMatch[1]).join("\n").trim() : "";
-    if (text || phMatch) shapes.push({ phType, text });
+  function titleFromSource(xml: string): string {
+    const m = titleRe.exec(xml);
+    if (!m) return "";
+    const after = xml.slice(m.index);
+    const tbEnd = after.indexOf("</a:txBody>");
+    if (tbEnd === -1) return "";
+    return extractAtText(after.slice(0, tbEnd));
   }
-  return shapes;
-}
 
-function getTitleFromShapes(shapes: ShapeInfo[]): string {
-  // Priority 1: explicit title/ctrTitle placeholder
-  const ts = shapes.find(s => s.phType === "title" || s.phType === "ctrTitle");
-  if (ts?.text) return ts.text.split("\n")[0].trim();
-  // Priority 2: first non-metadata shape with text (free text boxes)
-  for (const s of shapes) {
-    if (s.phType === "dt" || s.phType === "sldNum" || s.phType === "ftr") continue;
-    if (s.text) return s.text.split("\n")[0].trim();
-  }
+  const fromSlide = titleFromSource(slideXml);
+  if (fromSlide) return fromSlide;
+  // Fallback: title text inherited from slide layout
+  if (layoutXml) return titleFromSource(layoutXml);
   return "";
 }
 
-function getBulletsFromShapes(shapes: ShapeInfo[], titleText: string): string[] {
+// ── Bullet extraction: find all txBody elements, skip title + metadata ──
+function extractBulletsFromXml(slideXml: string, titleText: string): string[] {
   const bullets: string[] = [];
-  for (const s of shapes) {
-    if (s.phType === "title" || s.phType === "ctrTitle") continue;
-    if (s.phType === "dt" || s.phType === "sldNum" || s.phType === "ftr") continue;
-    const lines = s.text.split("\n").map(l => l.trim()).filter(l => l && l !== titleText);
+  const skipPh = /\btype=["'](?:dt|sldNum|ftr|title|ctrTitle)["']/i;
+
+  // Find the title txBody range so we can skip it
+  let titleTbStart = -1;
+  let titleTbEnd   = -1;
+  const titlePhM = /\btype=["'](?:title|ctrTitle)["']/i.exec(slideXml);
+  if (titlePhM) {
+    const afterPh  = slideXml.slice(titlePhM.index);
+    const tbEndOff = afterPh.indexOf("</a:txBody>");
+    if (tbEndOff !== -1) {
+      const tbStartOff = afterPh.lastIndexOf("<a:txBody>", tbEndOff);
+      if (tbStartOff !== -1) {
+        titleTbStart = titlePhM.index + tbStartOff;
+        titleTbEnd   = titlePhM.index + tbEndOff + "</a:txBody>".length;
+      }
+    }
+  }
+
+  for (const txm of slideXml.matchAll(/<a:txBody>([\s\S]*?)<\/a:txBody>/g)) {
+    const start = txm.index!;
+    const end   = start + txm[0].length;
+    // Skip title txBody by position
+    if (titleTbStart >= 0 && start >= titleTbStart && end <= titleTbEnd + 50) continue;
+    // Skip metadata placeholders — inspect 400 chars before this txBody
+    const before = slideXml.slice(Math.max(0, start - 400), start);
+    if (skipPh.test(before)) continue;
+    const lines = extractParagraphs(txm[1]).filter(l => l && l !== titleText);
     bullets.push(...lines);
   }
   return bullets;
@@ -185,7 +203,7 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
     if (m && m[1].trim()) presentationTitle = decodeXmlEntities(m[1].trim());
   }
 
-  // Parse slide relationship files to find notes
+  // Parse slide relationship files to find notes + layout refs
   const slideRels: Record<string, Record<string, string>> = {};
   for (const name of Object.keys(zip.files)) {
     const m = name.match(/^ppt\/slides\/_rels\/slide(\d+)\.xml\.rels$/i);
@@ -206,15 +224,33 @@ export async function importPptxFile(file: File): Promise<ImportedDeck> {
     const slideXml = await slideFile.async("text");
     const slideNum = slideFileNames[i].match(/slide(\d+)/i)?.[1] ?? String(i + 1);
 
-    // Parse all shapes first (handles <p:sp> with or without XML attributes)
-    const shapes = parseSlideShapes(slideXml);
-    let titleText = getTitleFromShapes(shapes) || `Slide ${i + 1}`;
-    const bullets = getBulletsFromShapes(shapes, titleText);
+    // Load slide layout XML for title fallback (titles sometimes only live in layout)
+    let layoutXml: string | undefined;
+    const rels0 = slideRels[slideNum] ?? {};
+    for (const target of Object.values(rels0)) {
+      if (target.includes("slideLayout")) {
+        const layoutPath = "ppt/slides/" + target.replace("../", "");
+        const altLayoutPath = "ppt/slideLayouts/" + target.replace("../slideLayouts/", "");
+        const lf = zip.file(layoutPath) ?? zip.file(altLayoutPath);
+        if (lf) { layoutXml = await lf.async("text"); break; }
+      }
+    }
+
+    // Extract title using positional approach (no <p:sp> block parsing)
+    let titleText = extractTitleFromXml(slideXml, layoutXml) || `Slide ${i + 1}`;
+    const bullets = extractBulletsFromXml(slideXml, titleText);
+
+    // Debug: log to console so devtools shows what was found
+    if (i < 3) {
+      console.log(`[PPTX] slide${slideNum}: title="${titleText}" bullets=${bullets.length} xmlLen=${slideXml.length}`);
+      console.log(`[PPTX] slide${slideNum} xml[0:300]:`, slideXml.slice(0, 300));
+    }
 
     // Detect type
+    const hasCtrTitle = /\btype=["']ctrTitle["']/i.test(slideXml) || (layoutXml ? /\btype=["']ctrTitle["']/i.test(layoutXml) : false);
     let type: Slide["type"] = "content";
-    if (i === 0 || slideXml.includes('type="ctrTitle"')) type = "title";
-    else if (bullets.length === 0 && slideXml.includes('type="title"')) type = "section";
+    if (i === 0 || hasCtrTitle) type = "title";
+    else if (bullets.length === 0) type = "section";
 
     // Try to load speaker notes
     let speakerNotes = "";
