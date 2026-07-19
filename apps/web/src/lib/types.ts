@@ -213,6 +213,146 @@ export interface VideoRec {
   createdAt: number;
 }
 
+// ---------------------------------------------------------------------------
+// Presentations — Slide Deck, Video, Collections
+// ---------------------------------------------------------------------------
+
+export type SlideType = "title" | "content" | "section" | "quiz" | "closing";
+
+export type ImageLayout =
+  | "full-background"
+  | "right-half"
+  | "top-banner"
+  | "inline-below-title"
+  | "bottom-strip"
+  | "none";
+
+export type ImageSource = "pollinations" | "svgrepo" | "openclipart" | "local" | "none";
+
+export interface SlideImage {
+  source: ImageSource;
+  /** Text prompt sent to Pollinations AI. */
+  prompt?: string;
+  /** Resolved public URL (Pollinations result, SVGRepo, OpenClipart). */
+  url?: string;
+  /** Base64 data URI for locally-picked files. */
+  dataUrl?: string;
+  layout: ImageLayout;
+  altText?: string;
+}
+
+export interface Slide {
+  id: string;
+  type: SlideType;
+  title: string;
+  bullets: string[];
+  /** Shown in presenter view and handout PDF — not on the slide itself. */
+  speakerNotes: string;
+  /** Spoken text fed to Web Speech API / audio export. */
+  narrationScript: string;
+  /** AI-suggested image prompt; user may edit before fetching. */
+  imagePrompt: string;
+  image?: SlideImage;
+  /** Reference to a Question id in the existing QuestionBank, for quiz slides. */
+  quizQuestionId?: string;
+  order: number;
+}
+
+export type NarrationTone = "formal" | "conversational" | "enthusiastic";
+export type AudienceLevel = "beginner" | "intermediate" | "expert";
+export type SlideTheme =
+  | "aurora-dark"
+  | "corporate-blue"
+  | "edu-warm"
+  | "minimal-white"
+  | "tech-green"
+  | "sunset-orange"
+  | "ocean-teal"
+  | "slate-pro";
+
+export type ImageStyle = "photorealistic" | "illustration" | "minimal" | "flat-icon" | "none";
+
+export interface DeckFrontmatter {
+  theme: SlideTheme;
+  accentColor?: string;
+  font?: string;
+  imageStyle: ImageStyle;
+  slideCount?: number;
+  audienceLevel: AudienceLevel;
+  language: string;
+  narrationTone: NarrationTone;
+  /** Voice name from Web Speech API getVoices(). */
+  voiceName?: string;
+  speechRate?: number;
+  speechPitch?: number;
+}
+
+export interface PresentationDeck {
+  id: string;
+  title: string;
+  /** KnowHub learning-page node id, if generated from one. */
+  sourceNodeId?: string;
+  /** Raw markdown that was transformed into this deck. */
+  sourceMd?: string;
+  frontmatter: DeckFrontmatter;
+  slides: Slide[];
+  /** GitHub release asset id for the exported .pptx, if uploaded. */
+  pptxAssetId?: number;
+  pptxAssetUrl?: string;
+  /** GitHub release asset id for the exported .webm video, if uploaded. */
+  videoAssetId?: number;
+  videoAssetUrl?: string;
+  /** Path to thumbnail PNG committed in the repo. */
+  thumbnailPath?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// GitHub Release Assets (for large binary storage)
+// ---------------------------------------------------------------------------
+
+export interface ReleaseAsset {
+  id: number;
+  name: string;
+  size: number;
+  /** Direct browser download URL (works with auth header for private repos). */
+  url: string;
+  browser_download_url: string;
+  created_at: string;
+}
+
+export interface AssetsRelease {
+  id: number;
+  upload_url: string;
+}
+
+// ---------------------------------------------------------------------------
+// Collections — folders / playlists / albums grouping decks and videos
+// ---------------------------------------------------------------------------
+
+export type CollectionType = "folder" | "playlist" | "album";
+
+export interface CollectionItem {
+  type: "deck" | "video";
+  /** deckId for decks, VideoRec.id for videos. */
+  refId: string;
+  order: number;
+  addedAt: number;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  type: CollectionType;
+  /** deckId whose thumbnail is used as the collection cover. */
+  coverDeckId?: string;
+  items: CollectionItem[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export const STATUS_LABELS: Record<NodeStatus, string> = {
   pending: "Pending",
   in_progress: "In progress",

@@ -24,4 +24,6 @@ export const IMPLEMENTED_MODULES: Record<
   settings: lazy(() => import("@/pages/SettingsPage")),
   "ai-chat": lazy(() => import("@/pages/AiChatPage")),
   "bulk-download": lazy(() => import("@/pages/BulkDownloadPage")),
+  presentations: lazy(() => import("@/pages/PresentationsPage")),
+  "md-guide": lazy(() => import("@/pages/MdGuidePage")),
 };

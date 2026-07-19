@@ -17,6 +17,7 @@ import {
   Youtube,
   Mic,
   Archive,
+  Presentation,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,6 +30,8 @@ export interface ModuleDef {
   summary: string;
   /** PRD module reference for traceability. */
   prdRef: string;
+  /** Optional tags for filtering/search. */
+  tags?: string[];
 }
 
 /**
@@ -156,6 +159,23 @@ export const MODULES: ModuleDef[] = [
     icon: Layers,
     summary: "Generate flashcards from learning pages and review them.",
     prdRef: "Module G5",
+  },
+  {
+    id: "presentations",
+    label: "Presentations",
+    path: "/app/presentations",
+    icon: Presentation,
+    summary: "Generate slide decks from Markdown, add narration, and export to PPTX or video.",
+    prdRef: "Feature-PPT",
+  },
+  {
+    id: "md-guide",
+    label: "MD Authoring Guide",
+    path: "/app/md-guide",
+    icon: BookOpen,
+    summary: "How to write Markdown files that become great presentations",
+    prdRef: "Feature-MDGuide",
+    tags: ["markdown", "guide", "presentation"],
   },
   {
     id: "guide",

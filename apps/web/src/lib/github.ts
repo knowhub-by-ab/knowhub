@@ -1,4 +1,4 @@
-import type { AppData } from "./types";
+import type { AppData, ReleaseAsset, AssetsRelease } from "./types";
 
 // Minimal GitHub REST client used directly from the browser (api.github.com
 // supports CORS with a bearer token). Powers the Repository module: connect a
@@ -64,6 +64,8 @@ export async function ensureRepo(
   });
   // Give GitHub a moment to finish initializing the default branch.
   await new Promise((r) => setTimeout(r, 1200));
+  // Pre-create the assets release so large-file uploads work immediately.
+  await ensureAssetsRelease(token, login, name).catch(() => {/* non-fatal */});
 }
 
 async function fileSha(
@@ -214,6 +216,193 @@ export async function syncToRepo(
   saveHashes(hashes);
   onProgress?.(changed === 0 ? "Everything up to date." : `Done — ${changed} file${changed === 1 ? "" : "s"} updated.`);
 }
+
+// ---------------------------------------------------------------------------
+// GitHub Releases — large binary storage (videos, audio, large PPTXes)
+// Files >= 50 MB are stored as release assets instead of repo content.
+// ---------------------------------------------------------------------------
+
+const LFS_THRESHOLD_BYTES = 50 * 1024 * 1024; // 50 MB
+const ASSETS_RELEASE_TAG = "knowhub-assets";
+const ASSETS_RELEASE_KEY = "knowhub:assets-release-id";
+
+export { LFS_THRESHOLD_BYTES };
+
+function getStoredReleaseId(): number | null {
+  try {
+    const v = localStorage.getItem(ASSETS_RELEASE_KEY);
+    return v ? Number(v) : null;
+  } catch { return null; }
+}
+
+function storeReleaseId(id: number) {
+  try { localStorage.setItem(ASSETS_RELEASE_KEY, String(id)); } catch { /* ignore */ }
+}
+
+/** Ensure a single persistent "knowhub-assets" release exists. Returns its id and upload_url. */
+export async function ensureAssetsRelease(
+  token: string,
+  owner: string,
+  repo: string
+): Promise<AssetsRelease> {
+  // Fast path: cached id
+  const cached = getStoredReleaseId();
+  if (cached) {
+    const rel = await gh<AssetsRelease | null>(token, `/repos/${owner}/${repo}/releases/${cached}`);
+    if (rel) { storeReleaseId(rel.id); return rel; }
+  }
+  // Check if the tagged release already exists
+  const existing = await gh<AssetsRelease | null>(
+    token,
+    `/repos/${owner}/${repo}/releases/tags/${ASSETS_RELEASE_TAG}`
+  );
+  if (existing) { storeReleaseId(existing.id); return existing; }
+  // Create it
+  const created = await gh<AssetsRelease>(token, `/repos/${owner}/${repo}/releases`, {
+    method: "POST",
+    body: JSON.stringify({
+      tag_name: ASSETS_RELEASE_TAG,
+      name: "KnowHub Large File Storage",
+      body: "Auto-managed by KnowHub. Do not delete.",
+      prerelease: true,
+    }),
+  });
+  storeReleaseId(created.id);
+  return created;
+}
+
+/**
+ * Upload a binary as a GitHub release asset.
+ * Uses XMLHttpRequest so upload progress can be reported.
+ * Deduplicates by filename — if an asset with the same name exists, returns it without re-uploading.
+ */
+export async function uploadReleaseAsset(
+  token: string,
+  owner: string,
+  repo: string,
+  filename: string,
+  buffer: ArrayBuffer,
+  mimeType: string,
+  onProgress?: (pct: number) => void
+): Promise<ReleaseAsset> {
+  const release = await ensureAssetsRelease(token, owner, repo);
+  // Deduplicate: check existing assets with same name
+  const existing = await listReleaseAssets(token, owner, repo, release.id);
+  const match = existing.find((a) => a.name === filename);
+  if (match) return match;
+  // Parse upload_url: "https://uploads.github.com/repos/:owner/:repo/releases/:id/assets{?name,label}"
+  const uploadBase = release.upload_url.replace(/\{[^}]+\}/, "");
+  const url = `${uploadBase}?name=${encodeURIComponent(filename)}`;
+  return new Promise<ReleaseAsset>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("Content-Type", mimeType);
+    xhr.setRequestHeader("Accept", "application/vnd.github+json");
+    xhr.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText) as ReleaseAsset);
+      } else {
+        reject(new GitHubError(`Release asset upload failed: ${xhr.status} ${xhr.responseText.slice(0, 160)}`));
+      }
+    };
+    xhr.onerror = () => reject(new GitHubError("Release asset upload network error"));
+    xhr.send(buffer);
+  });
+}
+
+/** Download a release asset as ArrayBuffer (works for private repos with token). */
+export async function downloadReleaseAsset(
+  token: string,
+  owner: string,
+  repo: string,
+  assetId: number
+): Promise<ArrayBuffer> {
+  const res = await fetch(`${API}/repos/${owner}/${repo}/releases/assets/${assetId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/octet-stream",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (!res.ok) throw new GitHubError(`Download failed: ${res.status}`);
+  return res.arrayBuffer();
+}
+
+/** List all assets on the knowhub-assets release. */
+export async function listReleaseAssets(
+  token: string,
+  owner: string,
+  repo: string,
+  releaseId?: number
+): Promise<ReleaseAsset[]> {
+  const id = releaseId ?? (await ensureAssetsRelease(token, owner, repo)).id;
+  return gh<ReleaseAsset[]>(token, `/repos/${owner}/${repo}/releases/${id}/assets?per_page=100`) ?? [];
+}
+
+/** Delete a release asset (e.g. when replacing a file or deleting a deck). */
+export async function deleteReleaseAsset(
+  token: string,
+  owner: string,
+  repo: string,
+  assetId: number
+): Promise<void> {
+  await gh(token, `/repos/${owner}/${repo}/releases/assets/${assetId}`, { method: "DELETE" });
+}
+
+/**
+ * Smart file commit: routes large binaries (>= 50 MB) to GitHub Releases
+ * instead of the Contents API. Returns asset metadata for large files, null for small.
+ */
+export async function putFileSmart(
+  token: string,
+  owner: string,
+  repo: string,
+  path: string,
+  content: string | ArrayBuffer,
+  message: string,
+  onProgress?: (pct: number) => void
+): Promise<ReleaseAsset | null> {
+  const isText = typeof content === "string";
+  const size = isText
+    ? new TextEncoder().encode(content).byteLength
+    : (content as ArrayBuffer).byteLength;
+
+  if (size >= LFS_THRESHOLD_BYTES) {
+    const buffer = isText ? new TextEncoder().encode(content).buffer as ArrayBuffer : (content as ArrayBuffer);
+    const filename = path.split("/").pop() ?? "file";
+    const ext = filename.split(".").pop() ?? "bin";
+    const mimeType = EXT_MIME[ext] ?? "application/octet-stream";
+    return uploadReleaseAsset(token, owner, repo, filename, buffer, mimeType, onProgress);
+  }
+
+  // Small file: use the existing Contents API
+  const textContent = isText ? content as string : new TextDecoder().decode(content as ArrayBuffer);
+  await putFile(token, owner, repo, path, textContent, message);
+  return null;
+}
+
+const EXT_MIME: Record<string, string> = {
+  webm: "video/webm",
+  mp4: "video/mp4",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  potx: "application/vnd.openxmlformats-officedocument.presentationml.template",
+  potm: "application/vnd.ms-powerpoint.template.macroEnabled.12",
+  pot: "application/vnd.ms-powerpoint",
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  zip: "application/zip",
+};
 
 export async function importFromRepo(
   token: string,

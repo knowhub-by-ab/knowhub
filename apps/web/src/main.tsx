@@ -12,6 +12,8 @@ const AppLayout = lazy(() => import("@/components/AppLayout"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const ModulePlaceholderPage = lazy(() => import("@/pages/ModulePlaceholderPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
+const DeckEditorPage = lazy(() => import("@/pages/DeckEditorPage"));
+const PresenterViewPage = lazy(() => import("@/pages/PresenterViewPage"));
 
 function Loading() {
   return (
@@ -43,6 +45,8 @@ const router = createBrowserRouter([
           element: Impl ? <Impl /> : <ModulePlaceholderPage moduleId={m.id} />,
         };
       }),
+      { path: "presentations/:deckId", element: <S><DeckEditorPage /></S> },
+      { path: "presentations/:deckId/present", element: <S><PresenterViewPage /></S> },
     ],
   },
   { path: "*", element: <NotFoundPage /> },
