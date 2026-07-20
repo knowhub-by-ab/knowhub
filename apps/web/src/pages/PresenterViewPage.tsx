@@ -151,6 +151,9 @@ export default function PresenterViewPage() {
             slide={currentSlide}
             theme={deck.frontmatter.theme}
             accentColor={deck.frontmatter.accentColor}
+            titleColor={deck.frontmatter.titleColor}
+            bodyColor={deck.frontmatter.bodyColor}
+            backgroundColor={deck.frontmatter.backgroundColor}
             font={deck.frontmatter.font}
             className="w-full shadow-2xl"
           />

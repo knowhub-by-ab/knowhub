@@ -184,6 +184,7 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
           accentColor: colors.accent,
           titleColor: colors.titleColor,
           bodyColor: colors.bodyColor,
+          backgroundColor: colors.bg,
           ...(colors.font ? { font: colors.font } : {}),
           templateFileB64: b64,
         });

@@ -303,6 +303,9 @@ export interface DeckFrontmatter {
   speechPitch?: number;
   /** Raw POTX/PPTX template file stored as base64 for template-based export. */
   templateFileB64?: string;
+  /** Background colour extracted from the POTX template (hex). When set, the
+   *  slide preview uses this directly instead of the built-in theme palette. */
+  backgroundColor?: string;
   /** Cloned voice ID for narration (from Fish Audio, ElevenLabs, or Resemble AI). */
   clonedVoiceId?: string;
   /** Provider that created the cloned voice. */

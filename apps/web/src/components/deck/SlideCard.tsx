@@ -83,7 +83,7 @@ export default function SlideCard({
 
       {/* Slide preview thumbnail */}
       <div className="p-3 pb-0">
-        <SlidePreview slide={slide} theme={frontmatter.theme} accentColor={frontmatter.accentColor} font={frontmatter.font} className="w-full" />
+        <SlidePreview slide={slide} theme={frontmatter.theme} accentColor={frontmatter.accentColor} titleColor={frontmatter.titleColor} bodyColor={frontmatter.bodyColor} backgroundColor={frontmatter.backgroundColor} font={frontmatter.font} className="w-full" />
       </div>
 
       {/* Edit fields (shown when selected) */}

@@ -5,16 +5,27 @@ interface Props {
   slide: Slide;
   theme: SlideTheme;
   accentColor?: string;
+  /** Direct title colour override from template (bypasses built-in theme). */
+  titleColor?: string;
+  /** Direct body colour override from template (bypasses built-in theme). */
+  bodyColor?: string;
+  /** Direct background colour override from template (bypasses built-in theme). */
+  backgroundColor?: string;
   font?: string;
   /** Scale factor for thumbnail rendering (default 1 = full size). */
   scale?: number;
   className?: string;
 }
 
-export default function SlidePreview({ slide, theme, accentColor, font, scale = 1, className = "" }: Props) {
+export default function SlidePreview({ slide, theme, accentColor, titleColor, bodyColor, backgroundColor, font, scale = 1, className = "" }: Props) {
   const t = THEMES[theme] ?? THEMES["aurora-dark"];
-  const accent = accentColor ?? t.accent;
-  const fontFace = font ?? t.font;
+  const accent    = accentColor    ?? t.accent;
+  const fontFace  = font           ?? t.font;
+  const bgColor   = backgroundColor ?? t.bg;
+  const titleClr  = titleColor     ?? t.titleColor;
+  const bodyClr   = bodyColor      ?? t.bodyColor;
+  // Template mode: all three direct color overrides are present
+  const isTemplate = !!(backgroundColor && titleColor && bodyColor);
   const isTitle = slide.type === "title";
   const isSection = slide.type === "section";
   const hasImage = !!(slide.image?.url || slide.image?.dataUrl);
@@ -24,8 +35,8 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
   const isImageOnly = hasImage && layout === "full-background" && slide.image?.source === "local" && !!slide.image?.dataUrl && slide.bullets.length === 0;
 
   const baseStyle: React.CSSProperties = {
-    backgroundColor: t.bg,
-    color: t.titleColor,
+    backgroundColor: bgColor,
+    color: titleClr,
     fontFamily: `${fontFace}, system-ui, sans-serif`,
     aspectRatio: "16/9",
     position: "relative",
@@ -55,16 +66,21 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 6, backgroundColor: accent }} />
         {/* Centered content */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "0 10%" }}>
-          <div style={{ fontSize: isTitle ? "2.2em" : "1.7em", fontWeight: 700, color: t.titleColor, textAlign: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: isTitle ? "2.2em" : "1.7em", fontWeight: 700, color: titleClr, textAlign: "center", marginBottom: 12 }}>
             {slide.title}
           </div>
           {isTitle && slide.bullets.length > 0 && (
-            <div style={{ fontSize: "1em", color: t.bodyColor, textAlign: "center" }}>
+            <div style={{ fontSize: "1em", color: bodyClr, textAlign: "center" }}>
               {slide.bullets.join(" · ")}
             </div>
           )}
           <div style={{ marginTop: 20, width: 60, height: 3, backgroundColor: accent, borderRadius: 2 }} />
         </div>
+        {isTemplate && (
+          <div style={{ position: "absolute", bottom: 5, right: 6, fontSize: "0.5em", background: "rgba(0,0,0,0.45)", color: "#fff", padding: "1px 5px", borderRadius: 6, letterSpacing: 1 }}>
+            TEMPLATE
+          </div>
+        )}
       </div>
     );
   }
@@ -104,7 +120,7 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
 
           <div style={contentStyle}>
             {/* Title */}
-            <div style={{ fontSize: "1.25em", fontWeight: 700, color: t.titleColor, marginBottom: 6 }}>
+            <div style={{ fontSize: "1.25em", fontWeight: 700, color: titleClr, marginBottom: 6 }}>
               {slide.title}
             </div>
             {/* Accent underline */}
@@ -119,7 +135,7 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
             {/* Bullets */}
             <ul style={{ margin: 0, paddingLeft: "1.2em", listStyleType: "disc" }}>
               {slide.bullets.map((b, i) => (
-                <li key={i} style={{ fontSize: "0.85em", color: t.bodyColor, marginBottom: 4, lineHeight: 1.4 }}>
+                <li key={i} style={{ fontSize: "0.85em", color: bodyClr, marginBottom: 4, lineHeight: 1.4 }}>
                   {b}
                 </li>
               ))}
@@ -144,6 +160,12 @@ export default function SlidePreview({ slide, theme, accentColor, font, scale = 
       {(slide.type === "quiz" || slide.type === "closing") && (
         <div style={{ position: "absolute", top: 6, right: 8, fontSize: "0.6em", background: accent, color: "#fff", padding: "2px 6px", borderRadius: 10, textTransform: "uppercase", letterSpacing: 1 }}>
           {slide.type}
+        </div>
+      )}
+      {/* Template mode indicator */}
+      {isTemplate && (
+        <div style={{ position: "absolute", bottom: 5, right: 6, fontSize: "0.5em", background: "rgba(0,0,0,0.45)", color: "#fff", padding: "1px 5px", borderRadius: 6, letterSpacing: 1 }}>
+          TEMPLATE
         </div>
       )}
     </div>

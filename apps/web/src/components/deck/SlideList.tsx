@@ -40,7 +40,7 @@ function SortableItem({ slide, frontmatter, isSelected, onSelect }: SortableItem
         onClick={onSelect}
       >
         <div {...listeners} className="cursor-grab active:cursor-grabbing">
-          <SlidePreview slide={slide} theme={frontmatter.theme} accentColor={frontmatter.accentColor} font={frontmatter.font} className="w-full" />
+          <SlidePreview slide={slide} theme={frontmatter.theme} accentColor={frontmatter.accentColor} titleColor={frontmatter.titleColor} bodyColor={frontmatter.bodyColor} backgroundColor={frontmatter.backgroundColor} font={frontmatter.font} className="w-full" />
         </div>
         <div className="px-2 py-1 bg-zinc-900 flex items-center justify-between">
           <span className="text-xs text-zinc-400 truncate">{slide.title}</span>
