@@ -7,8 +7,9 @@ const LANGUAGES = [
   { code: "en", label: "English" }, { code: "es", label: "Spanish" },
   { code: "fr", label: "French" }, { code: "de", label: "German" },
   { code: "pt", label: "Portuguese" }, { code: "hi", label: "Hindi" },
-  { code: "zh", label: "Chinese" }, { code: "ar", label: "Arabic" },
-  { code: "ja", label: "Japanese" }, { code: "ko", label: "Korean" },
+  { code: "bn", label: "Bengali" }, { code: "zh", label: "Chinese" },
+  { code: "ar", label: "Arabic" }, { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
 ];
 
 interface Props {

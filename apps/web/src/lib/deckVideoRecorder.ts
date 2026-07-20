@@ -30,6 +30,7 @@ export interface VideoResult {
 export interface ChapterMarker {
   slideIndex: number;
   title: string;
+  script: string;
   startSec: number;
 }
 
@@ -243,7 +244,7 @@ function buildSrt(chapters: ChapterMarker[], durations: number[]): string {
   return chapters.map((ch, i) => {
     const start = ch.startSec;
     const end = start + (durations[i] ?? 5);
-    return `${i + 1}\n${secToTimecode(start, ",")} --> ${secToTimecode(end, ",")}\n${ch.title}\n`;
+    return `${i + 1}\n${secToTimecode(start, ",")} --> ${secToTimecode(end, ",")}\n${ch.script || ch.title}\n`;
   }).join("\n");
 }
 
@@ -251,7 +252,7 @@ function buildVtt(chapters: ChapterMarker[], durations: number[]): string {
   const cues = chapters.map((ch, i) => {
     const start = ch.startSec;
     const end = start + (durations[i] ?? 5);
-    return `${secToTimecode(start, ".")} --> ${secToTimecode(end, ".")}\n${ch.title}`;
+    return `${secToTimecode(start, ".")} --> ${secToTimecode(end, ".")}\n${ch.script || ch.title}`;
   }).join("\n\n");
   return `WEBVTT\n\n${cues}`;
 }
@@ -406,7 +407,7 @@ export async function recordDeckVideo(
     const estSec = narration.trim() ? Math.max(secondsPerSlide, words / (2.5 * rate)) : secondsPerSlide;
     const durationMs = estSec * 1000;
 
-    chapters.push({ slideIndex: i, title: slide.title, startSec: currentSec });
+    chapters.push({ slideIndex: i, title: slide.title, script: narration, startSec: currentSec });
     durations.push(estSec);
 
     onProgress?.(

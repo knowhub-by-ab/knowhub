@@ -191,3 +191,141 @@ export const LAYOUT_STYLES: Record<ImageLayout, LayoutStyle> = {
     contentClass: "",
   },
 };
+
+// ---------------------------------------------------------------------------
+// Paid image providers: fal.ai FLUX + Runware
+// ---------------------------------------------------------------------------
+
+import type { ProviderKey } from "@/lib/types";
+
+/** Find a fal.ai key from the user's configured AI keys. */
+function findFalKey(keys: ProviderKey[]): string | null {
+  for (const k of keys) {
+    if (k.apiKey && (k.apiKey.startsWith("fal-") || (k.baseUrl ?? "").includes("fal.run"))) {
+      return k.apiKey;
+    }
+  }
+  return null;
+}
+
+/** Find a Runware key from configured AI keys. */
+function findRunwareKey(keys: ProviderKey[]): string | null {
+  for (const k of keys) {
+    if ((k.baseUrl ?? "").includes("runware.ai")) return k.apiKey;
+    if (k.provider === ("runware" as string)) return k.apiKey;
+  }
+  return null;
+}
+
+/** Generate image via fal.ai FLUX (high quality, requires fal-* API key). */
+export async function fetchFalImage(
+  prompt: string,
+  style: "photorealistic" | "illustration" | "minimal" | "flat-icon" | "none",
+  ratio?: "16:9" | "4:3" | "1:1" | "3:2" | "2:3" | "9:16",
+  falKey?: string
+): Promise<ImageResult | null> {
+  if (!falKey) return null;
+  const styleHint: Record<string, string> = {
+    photorealistic: "photorealistic, ultra-realistic, professional photograph, high detail",
+    illustration: "digital illustration, vibrant colors, professional, detailed artwork",
+    minimal: "minimalist, clean design, simple shapes, white background, flat design",
+    "flat-icon": "flat icon, vector art, simple geometric shapes, bold colors",
+    none: "",
+  };
+  const sizeName: Record<string, string> = {
+    "16:9": "landscape_16_9",
+    "4:3":  "landscape_4_3",
+    "1:1":  "square",
+    "3:2":  "landscape_4_3",
+    "2:3":  "portrait_4_3",
+    "9:16": "portrait_16_9",
+  };
+  const hint = styleHint[style] ?? "";
+  const fullPrompt = hint ? `${prompt}, ${hint}, vibrant colors, high quality` : `${prompt}, vibrant colors, high quality`;
+  const image_size = sizeName[ratio ?? "16:9"] ?? "landscape_16_9";
+  try {
+    const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
+      method: "POST",
+      headers: { "Authorization": `Key ${falKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: fullPrompt, image_size, num_images: 1, enable_safety_checker: false }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { images?: { url: string }[] };
+    const url = data.images?.[0]?.url;
+    if (!url) return null;
+    return { url, credit: "fal.ai FLUX" };
+  } catch {
+    return null;
+  }
+}
+
+/** Generate image via Runware API. */
+export async function fetchRunwareImage(
+  prompt: string,
+  style: "photorealistic" | "illustration" | "minimal" | "flat-icon" | "none",
+  ratio?: "16:9" | "4:3" | "1:1" | "3:2" | "2:3" | "9:16",
+  runwareKey?: string
+): Promise<ImageResult | null> {
+  if (!runwareKey) return null;
+  const RATIO_DIMS: Record<string, [number, number]> = {
+    "16:9": [1280, 720], "4:3": [800, 600], "1:1": [512, 512],
+    "3:2": [768, 512], "2:3": [512, 768], "9:16": [576, 1024],
+  };
+  const [width, height] = RATIO_DIMS[ratio ?? "16:9"] ?? [1280, 720];
+  const styleHint: Record<string, string> = {
+    photorealistic: "photorealistic, high quality, detailed",
+    illustration: "digital illustration, vibrant, colorful, professional",
+    minimal: "minimalist, clean, simple",
+    "flat-icon": "flat design, vector style",
+    none: "",
+  };
+  const hint = styleHint[style] ?? "";
+  const positivePrompt = hint ? `${prompt}, ${hint}, vibrant colors` : `${prompt}, vibrant colors`;
+  try {
+    const res = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${runwareKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify([{
+        taskType: "imageInference",
+        taskUUID: crypto.randomUUID(),
+        positivePrompt,
+        width,
+        height,
+        model: "runware:100@1",
+        numberResults: 1,
+        outputFormat: "WEBP",
+      }]),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { data?: { imageURL?: string }[] };
+    const url = data.data?.[0]?.imageURL;
+    if (!url) return null;
+    return { url, credit: "Runware AI" };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the best available image for a slide.
+ * Priority: fal.ai → Runware → Pollinations (free fallback).
+ * Pass aiKeys from the user's store to enable paid providers.
+ */
+export async function fetchBestImage(
+  prompt: string,
+  style: "photorealistic" | "illustration" | "minimal" | "flat-icon" | "none" = "illustration",
+  ratio?: "16:9" | "4:3" | "1:1" | "3:2" | "2:3" | "9:16",
+  aiKeys: ProviderKey[] = []
+): Promise<ImageResult> {
+  const falKey = findFalKey(aiKeys);
+  if (falKey) {
+    const result = await fetchFalImage(prompt, style, ratio, falKey);
+    if (result) return result;
+  }
+  const runwareKey = findRunwareKey(aiKeys);
+  if (runwareKey) {
+    const result = await fetchRunwareImage(prompt, style, ratio, runwareKey);
+    if (result) return result;
+  }
+  return fetchPollinationsImage(prompt, 1280, 720, style, ratio);
+}

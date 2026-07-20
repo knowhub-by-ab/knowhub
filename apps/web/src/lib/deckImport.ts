@@ -12,6 +12,7 @@ export interface ExtractedTheme {
   titleColor: string;
   bodyColor: string;
   accent: string;
+  font?: string;
 }
 
 function uid(): string {
@@ -158,11 +159,15 @@ export function extractThemeColors(themeXml: string): ExtractedTheme | null {
     const dk2 = getColor("dk2");
     const accent1 = getColor("accent1");
     if (!lt1 && !dk1) return null;
+    // Extract majorFont (heading font) from <a:fontScheme>
+    const fontM = themeXml.match(/<a:majorFont>[\s\S]{0,200}?<a:latin\b[^>]*\btypeface=["']([^"']+)["']/i);
+    const font = fontM ? fontM[1] : undefined;
     return {
       bg: lt1 || "#1a1a2e",
       titleColor: dk1 || "#ffffff",
       bodyColor: dk2 || "#cccccc",
       accent: accent1 || "#6366f1",
+      font,
     };
   } catch {
     return null;

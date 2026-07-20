@@ -171,7 +171,13 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
         const b = parseInt(hex.slice(4, 6) || "0", 16);
         const lum = (r * 299 + g * 587 + b * 114) / 1000;
         const theme: DeckFrontmatter["theme"] = lum < 128 ? "aurora-dark" : "minimal-white";
-        setTemplateFm({ theme, accentColor: colors.accent });
+        setTemplateFm({
+          theme,
+          accentColor: colors.accent,
+          titleColor: colors.titleColor,
+          bodyColor: colors.bodyColor,
+          ...(colors.font ? { font: colors.font } : {}),
+        });
         setTemplateName(file.name);
       } else {
         alert("Could not extract theme from this file. It may not contain a standard OOXML theme.");

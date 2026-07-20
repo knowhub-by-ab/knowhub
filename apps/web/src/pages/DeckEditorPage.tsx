@@ -2,7 +2,7 @@ import { useState, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, Plus, Wand2, Languages } from "lucide-react";
 import { useDeckStore, decks as deckOps } from "@/lib/deckStore";
-import type { DeckFrontmatter } from "@/lib/deckStore";
+import type { DeckFrontmatter, Slide } from "@/lib/deckStore";
 import { useAppData } from "@/lib/store";
 import {
   generateNarrationScripts,
@@ -40,6 +40,7 @@ export default function DeckEditorPage() {
   // Large-file / duplicate modals state
   const [largeFileState, setLargeFileState] = useState<{ blob: Blob; filename: string; uploading: boolean; progress: number } | null>(null);
   const [duplicateState, setDuplicateState] = useState<{ blob: Blob; filename: string; existingAssetId: number } | null>(null);
+  const [preTranslateSlides, setPreTranslateSlides] = useState<Slide[] | null>(null);
 
   if (!deck) {
     return (
@@ -123,7 +124,16 @@ export default function DeckEditorPage() {
 
   async function handleTranslate(targetLang: string) {
     if (!aiKeys.length) return;
+    if (targetLang === "en-revert" && preTranslateSlides !== null) {
+      deckOps.setSlides(deck!.id, preTranslateSlides);
+      deckOps.updateFrontmatter(deck!.id, { language: "en" });
+      setPreTranslateSlides(null);
+      return;
+    }
     try {
+      if (preTranslateSlides === null) {
+        setPreTranslateSlides(deck!.slides.map(s => ({ ...s })));
+      }
       const translated = await translateSlides(aiKeys, deck!.slides, targetLang);
       deckOps.setSlides(deck!.id, translated);
       deckOps.updateFrontmatter(deck!.id, { language: targetLang });
@@ -327,7 +337,7 @@ export default function DeckEditorPage() {
                 Regenerate Slides
               </button>
             )}
-            <TranslateButton onTranslate={handleTranslate} />
+            <TranslateButton onTranslate={handleTranslate} hasOriginal={preTranslateSlides !== null} />
           </div>
 
           {sortedSlides.length === 0 ? (
@@ -413,6 +423,7 @@ export default function DeckEditorPage() {
 // Translate button with language picker
 // ---------------------------------------------------------------------------
 const TRANSLATE_LANGS = [
+  { code: "en", label: "English" },
   { code: "es", label: "Spanish" }, { code: "fr", label: "French" },
   { code: "de", label: "German" }, { code: "pt", label: "Portuguese" },
   { code: "hi", label: "Hindi" }, { code: "zh", label: "Chinese" },
@@ -420,7 +431,7 @@ const TRANSLATE_LANGS = [
   { code: "ko", label: "Korean" }, { code: "ja", label: "Japanese" },
 ];
 
-function TranslateButton({ onTranslate }: { onTranslate: (lang: string) => void }) {
+function TranslateButton({ onTranslate, hasOriginal }: { onTranslate: (lang: string) => void; hasOriginal: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
@@ -432,6 +443,15 @@ function TranslateButton({ onTranslate }: { onTranslate: (lang: string) => void 
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-20 py-1 min-w-36" onMouseLeave={() => setOpen(false)}>
+          {hasOriginal && (
+            <button
+              key="en-revert"
+              onClick={() => { onTranslate("en-revert"); setOpen(false); }}
+              className="w-full text-left px-4 py-1.5 text-xs text-emerald-400 hover:bg-zinc-800"
+            >
+              ↩ Revert to original
+            </button>
+          )}
           {TRANSLATE_LANGS.map((l) => (
             <button
               key={l.code}
