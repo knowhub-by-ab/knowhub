@@ -450,6 +450,33 @@ export async function exportPptxFromTemplate(
   const ctFile = outZip.file("[Content_Types].xml");
   if (ctFile) {
     let ctXml = await ctFile.async("text");
+
+    // Fix: POTX templates have "template.main+xml" — exported .pptx must use "presentation.main+xml"
+    ctXml = ctXml.replace(
+      /presentationml\.template\.main\+xml/g,
+      "presentationml.presentation.main+xml"
+    );
+
+    // Ensure image file extensions have registered Default content types
+    // (templates often lack these, causing PowerPoint to reject embedded images)
+    const imageDefaults: Array<[string, string]> = [
+      ["jpeg", "image/jpeg"],
+      ["jpg",  "image/jpeg"],
+      ["png",  "image/png"],
+      ["gif",  "image/gif"],
+      ["webp", "image/webp"],
+      ["svg",  "image/svg+xml"],
+    ];
+    for (const [ext, mime] of imageDefaults) {
+      if (!ctXml.includes(`Extension="${ext}"`)) {
+        ctXml = ctXml.replace(
+          "</Types>",
+          `<Default Extension="${ext}" ContentType="${mime}"/></Types>`
+        );
+      }
+    }
+
+    // Remove old slide overrides (template slides we dropped), then add ours
     ctXml = ctXml.replace(/<Override[^>]*\/ppt\/slides\/slide\d+\.xml"[^>]*\/>/g, "");
     const slideOverrides = deckSlides.map((_, i) =>
       `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
