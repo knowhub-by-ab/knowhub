@@ -59,57 +59,59 @@ export async function fetchPollinationsImage(
 }
 
 // ---------------------------------------------------------------------------
-// SVGRepo — free SVG search, CC0 / licensed vectors
+// Iconify — free CORS-friendly SVG icon search (replaces SVGRepo)
 // ---------------------------------------------------------------------------
 
-interface SvgRepoItem {
-  id: string;
-  title: string;
-  url: string; // SVG file URL
-}
-
-export async function searchSvgRepo(query: string, limit = 6): Promise<ImageResult[]> {
+export async function searchSvgRepo(query: string, limit = 12): Promise<ImageResult[]> {
   try {
-    // SVGRepo's public search endpoint (undocumented but stable)
+    // Iconify public search API — supports CORS, free, no auth needed
     const res = await fetch(
-      `https://www.svgrepo.com/api/search/?query=${encodeURIComponent(query)}&limit=${limit}`
+      `https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=${limit}`
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as { svgs?: SvgRepoItem[] };
-    return (data.svgs ?? []).map((item) => ({
-      url: item.url,
-      title: item.title,
-      credit: "SVGRepo (free)",
-      isVector: true,
-    }));
+    const data = (await res.json()) as { icons?: string[] };
+    return (data.icons ?? []).slice(0, limit).map((icon) => {
+      const [collection, name] = icon.split(":");
+      return {
+        url: `https://api.iconify.design/${collection}/${name}.svg`,
+        title: (name ?? icon).replace(/-/g, " "),
+        credit: "Iconify (free)",
+        isVector: true,
+      };
+    });
   } catch {
     return [];
   }
 }
 
 // ---------------------------------------------------------------------------
-// OpenClipart — free public domain clipart
+// Illustrations — Undraw-style via SVG search fallback (replaces OpenClipart)
 // ---------------------------------------------------------------------------
 
-interface OpenClipartItem {
-  title: string;
-  svg: { url: string };
-  attribution: { title: string };
-}
-
-export async function searchOpenClipart(query: string, limit = 6): Promise<ImageResult[]> {
+export async function searchOpenClipart(query: string, limit = 12): Promise<ImageResult[]> {
+  // OpenClipart has persistent CORS and availability issues.
+  // Fall back to Iconify illustration packs (e.g. "oui", "twemoji", "noto").
   try {
     const res = await fetch(
-      `https://openclipart.org/search/json/?query=${encodeURIComponent(query)}&amount=${limit}`
+      `https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=${limit}&category=illustration`
     );
-    if (!res.ok) return [];
-    const data = (await res.json()) as { payload?: OpenClipartItem[] };
-    return (data.payload ?? []).map((item) => ({
-      url: item.svg.url,
-      title: item.title,
-      credit: "OpenClipart (public domain)",
-      isVector: true,
-    }));
+    if (!res.ok) {
+      // If category filter not supported, do a plain search biased toward illustrations
+      const res2 = await fetch(
+        `https://api.iconify.design/search?query=${encodeURIComponent(query + " illustration")}&limit=${limit}`
+      );
+      if (!res2.ok) return [];
+      const data2 = (await res2.json()) as { icons?: string[] };
+      return (data2.icons ?? []).slice(0, limit).map((icon) => {
+        const [col, name] = icon.split(":");
+        return { url: `https://api.iconify.design/${col}/${name}.svg`, title: (name ?? icon).replace(/-/g, " "), credit: "Iconify (free)", isVector: true };
+      });
+    }
+    const data = (await res.json()) as { icons?: string[] };
+    return (data.icons ?? []).slice(0, limit).map((icon) => {
+      const [col, name] = icon.split(":");
+      return { url: `https://api.iconify.design/${col}/${name}.svg`, title: (name ?? icon).replace(/-/g, " "), credit: "Iconify (free)", isVector: true };
+    });
   } catch {
     return [];
   }

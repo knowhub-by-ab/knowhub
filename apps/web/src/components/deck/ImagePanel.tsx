@@ -47,12 +47,29 @@ export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChan
     try {
       if (activeSource === "pollinations") {
         const result = await fetchPollinationsImage(imagePrompt, 800, 450, imageStyle, image?.imageRatio);
-        onImageChange({ source: "pollinations", url: result.url, prompt: imagePrompt, layout: currentLayout, imageRatio: image?.imageRatio, objectFit: image?.objectFit });
+        // Fetch as dataUrl so PPTX export embeds the exact image shown (Pollinations regenerates
+        // on each URL access, so we must pin the result now).
+        let dataUrl: string | undefined;
+        try {
+          const resp = await fetch(result.url);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            dataUrl = await new Promise<string>((res) => {
+              const reader = new FileReader();
+              reader.onload = () => res(reader.result as string);
+              reader.onerror = () => res("");
+              reader.readAsDataURL(blob);
+            }) || undefined;
+          }
+        } catch { /* dataUrl stays undefined — PPTX export will retry via canvas */ }
+        onImageChange({ source: "pollinations", url: result.url, dataUrl: dataUrl || undefined, prompt: imagePrompt, layout: currentLayout, imageRatio: image?.imageRatio, objectFit: image?.objectFit });
       } else if (activeSource === "svgrepo") {
         const results = await searchSvgRepo(imagePrompt);
+        if (results.length === 0) setError("No icons found. Try a different keyword.");
         setSearchResults(results.map((r) => ({ url: r.url, title: r.title })));
       } else if (activeSource === "openclipart") {
         const results = await searchOpenClipart(imagePrompt);
+        if (results.length === 0) setError("No illustrations found. Try a different keyword.");
         setSearchResults(results.map((r) => ({ url: r.url, title: r.title })));
       }
     } catch {
@@ -80,10 +97,30 @@ export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChan
 
   function handleLayoutChange(layout: ImageLayout) {
     if (layout === "none") { onImageChange(undefined); return; }
-    if (image) onImageChange({ ...image, layout });
-    else if (activeSource === "pollinations" && imagePrompt) {
-      // Auto-fetch when layout is set and we have a prompt but no image yet
-      onImageChange({ source: "pollinations", url: fetchPollinationsImage(imagePrompt, 800, 450, imageStyle).then(r => r.url) as unknown as string, prompt: imagePrompt, layout });
+    if (image) {
+      onImageChange({ ...image, layout });
+    } else if (activeSource === "pollinations" && imagePrompt) {
+      // Auto-fetch properly (async) when layout is chosen but no image exists yet
+      setLoading(true);
+      fetchPollinationsImage(imagePrompt, 800, 450, imageStyle, undefined)
+        .then(async (result) => {
+          let dataUrl: string | undefined;
+          try {
+            const resp = await fetch(result.url);
+            if (resp.ok) {
+              const blob = await resp.blob();
+              dataUrl = await new Promise<string>((res) => {
+                const reader = new FileReader();
+                reader.onload = () => res(reader.result as string);
+                reader.onerror = () => res("");
+                reader.readAsDataURL(blob);
+              }) || undefined;
+            }
+          } catch { /* leave dataUrl undefined */ }
+          onImageChange({ source: "pollinations", url: result.url, dataUrl: dataUrl || undefined, prompt: imagePrompt, layout });
+        })
+        .catch(() => setError("Failed to fetch image."))
+        .finally(() => setLoading(false));
     }
   }
 
@@ -106,7 +143,7 @@ export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChan
               activeSource === src ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            {src === "pollinations" ? "AI" : src === "svgrepo" ? "SVG" : src === "openclipart" ? "Clip" : "Local"}
+            {src === "pollinations" ? "AI" : src === "svgrepo" ? "Icons" : src === "openclipart" ? "Illustr." : "Local"}
           </button>
         ))}
       </div>
@@ -235,7 +272,10 @@ export default function ImagePanel({ image, imagePrompt, imageStyle, onImageChan
           type="checkbox"
           checked={(image?.objectFit ?? "cover") === "contain"}
           onChange={(e) => {
-            onImageChange(image ? { ...image, objectFit: e.target.checked ? "contain" : "cover" } : undefined);
+            const fit = e.target.checked ? "contain" : "cover";
+            if (image) onImageChange({ ...image, objectFit: fit });
+            // If no image yet, the next image generated will pick up objectFit from image prop (which is undefined).
+            // We leave the checkbox state here; it applies as soon as an image is set.
           }}
           className="accent-indigo-500"
         />

@@ -13,6 +13,31 @@
 
 import type { PresentationDeck, Slide } from "./types";
 
+/** Load an image URL via an <img> element and draw it to canvas to get a dataUrl.
+ *  Works around CORS when the server doesn't send CORS headers on the fetch() path
+ *  but does allow cross-origin <img> loads (Pollinations AI does this). */
+function urlToDataUrlViaCanvas(url: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width  = img.naturalWidth  || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg", 0.92));
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    // Add cache-busting so the browser actually makes the request with the crossOrigin header
+    img.src = url.includes("?") ? `${url}&_cb=${Date.now()}` : `${url}?_cb=${Date.now()}`;
+    setTimeout(() => resolve(null), 15000); // 15 s timeout
+  });
+}
+
 function b64ToUint8Array(b64: string): Uint8Array {
   const bin = atob(b64);
   const arr = new Uint8Array(bin.length);
@@ -31,9 +56,15 @@ function escXml(s: string): string {
 
 // ── Layout catalogue ────────────────────────────────────────────────────────
 
+interface LayoutPlaceholder {
+  type: string;  // "title", "ctrTitle", "body", "pic", "subTitle"
+  idx: number;   // 0 when no idx attribute is present
+}
+
 interface LayoutInfo {
   /** Relative path from ppt/ root, e.g. "slideLayouts/slideLayout2.xml" */
   path: string;
+  placeholders: LayoutPlaceholder[];
   hasCtrTitle: boolean;
   hasTitle: boolean;
   hasBody: boolean;
@@ -42,14 +73,31 @@ interface LayoutInfo {
 }
 
 function parseLayoutXml(xml: string, path: string): LayoutInfo {
+  const placeholders: LayoutPlaceholder[] = [];
+  const phRe = /<p:ph\b([^>]*?)(?:\/>|>)/g;
+  let m: RegExpExecArray | null;
+  while ((m = phRe.exec(xml)) !== null) {
+    const attrs = m[1];
+    const typeM = attrs.match(/\btype=["']([^"']+)["']/);
+    const idxM  = attrs.match(/\bidx=["'](\d+)["']/);
+    if (typeM) {
+      placeholders.push({ type: typeM[1], idx: idxM ? parseInt(idxM[1]) : 0 });
+    }
+  }
   return {
     path,
-    hasCtrTitle: /type=["']ctrTitle["']/.test(xml),
-    hasTitle:    /type=["']title["']/.test(xml),
-    hasBody:     /type=["']body["']/.test(xml),
-    hasPic:      /type=["']pic["']/.test(xml),
-    hasSubTitle: /type=["']subTitle["']/.test(xml),
+    placeholders,
+    hasCtrTitle: placeholders.some(p => p.type === "ctrTitle"),
+    hasTitle:    placeholders.some(p => p.type === "title"),
+    hasBody:     placeholders.some(p => p.type === "body"),
+    hasPic:      placeholders.some(p => p.type === "pic"),
+    hasSubTitle: placeholders.some(p => p.type === "subTitle"),
   };
+}
+
+function phIdx(layout: LayoutInfo, type: string): string {
+  const ph = layout.placeholders.find(p => p.type === type);
+  return ph?.idx ? ` idx="${ph.idx}"` : "";
 }
 
 // Build the layout catalogue by:
@@ -90,6 +138,11 @@ async function buildLayoutCatalogue(
   if (seen.size === 0) {
     seen.set("slideLayouts/slideLayout1.xml", {
       path: "slideLayouts/slideLayout1.xml",
+      placeholders: [
+        { type: "ctrTitle", idx: 0 },
+        { type: "body", idx: 1 },
+        { type: "subTitle", idx: 3 },
+      ],
       hasCtrTitle: true, hasTitle: true, hasBody: true, hasPic: false, hasSubTitle: true,
     });
   }
@@ -152,14 +205,14 @@ function buildMinimalSlideXml(
   const shapes: string[] = [];
   let id = 2;
 
-  // Title / ctrTitle
+  // Title / ctrTitle — use exact type and idx from the layout
   if (layout.hasCtrTitle || layout.hasTitle) {
-    const phAttr = layout.hasCtrTitle ? 'type="ctrTitle"' : 'type="title"';
+    const phType = layout.hasCtrTitle ? "ctrTitle" : "title";
     shapes.push(`<p:sp>
       <p:nvSpPr>
         <p:cNvPr id="${id++}" name="Title"/>
         <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
-        <p:nvPr><p:ph ${phAttr}/></p:nvPr>
+        <p:nvPr><p:ph type="${phType}"${phIdx(layout, phType)}/></p:nvPr>
       </p:nvSpPr>
       <p:spPr/>
       <p:txBody>
@@ -169,7 +222,7 @@ function buildMinimalSlideXml(
     </p:sp>`);
   }
 
-  // Body (bullet points)
+  // Body (bullet points) — use the exact idx from the layout (critical for layout1 which uses idx="2")
   if (layout.hasBody) {
     const bulletContent = slide.bullets.length > 0
       ? slide.bullets.map(b =>
@@ -181,7 +234,7 @@ function buildMinimalSlideXml(
       <p:nvSpPr>
         <p:cNvPr id="${id++}" name="Body"/>
         <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
-        <p:nvPr><p:ph type="body" idx="1"/></p:nvPr>
+        <p:nvPr><p:ph type="body"${phIdx(layout, "body")}/></p:nvPr>
       </p:nvSpPr>
       <p:spPr/>
       <p:txBody>
@@ -191,13 +244,13 @@ function buildMinimalSlideXml(
     </p:sp>`);
   }
 
-  // Subtitle (cover slides)
+  // Subtitle (cover slides) — use exact idx from layout
   if (layout.hasSubTitle && (slide.type === "title" || slide.type === "section") && slide.bullets.length > 0) {
     shapes.push(`<p:sp>
       <p:nvSpPr>
         <p:cNvPr id="${id++}" name="Subtitle"/>
         <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
-        <p:nvPr><p:ph type="subTitle" idx="3"/></p:nvPr>
+        <p:nvPr><p:ph type="subTitle"${phIdx(layout, "subTitle")}/></p:nvPr>
       </p:nvSpPr>
       <p:spPr/>
       <p:txBody>
@@ -207,15 +260,14 @@ function buildMinimalSlideXml(
     </p:sp>`);
   }
 
-  // Image — use a pic placeholder if the layout has one, otherwise freeform on right half
+  // Image — pic placeholder inherits layout geometry (shape, position, rounded rect etc.)
   if (imageRId) {
     if (layout.hasPic) {
-      // Placeholder pic: inherits position from layout
       shapes.push(`<p:pic>
         <p:nvPicPr>
           <p:cNvPr id="${id++}" name="AI Picture"/>
           <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
-          <p:nvPr><p:ph type="pic" idx="1"/></p:nvPr>
+          <p:nvPr><p:ph type="pic"${phIdx(layout, "pic")}/></p:nvPr>
         </p:nvPicPr>
         <p:blipFill>
           <a:blip r:embed="${imageRId}"/>
@@ -224,7 +276,7 @@ function buildMinimalSlideXml(
         <p:spPr/>
       </p:pic>`);
     } else {
-      // Freeform picture on the right half
+      // Freeform picture on the right half when layout has no pic placeholder
       shapes.push(`<p:pic>
         <p:nvPicPr>
           <p:cNvPr id="${id++}" name="AI Picture"/>
@@ -348,21 +400,39 @@ export async function exportPptxFromTemplate(
                : "jpg";
       const mediaName = `ppt/media/aiimg${mediaCounter}.${imageExt}`;
 
+      let imageBytes: Uint8Array | null = null;
+
       if (imageUrl.startsWith("data:")) {
+        // Already a base64 data URL — decode directly
         const b64part = imageUrl.split(",")[1];
-        const bin = atob(b64part);
-        const arr = new Uint8Array(bin.length);
-        for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
-        outZip.file(mediaName, arr);
-        imageRId = `rId${mediaCounter}`;
+        if (b64part) {
+          const bin = atob(b64part);
+          imageBytes = new Uint8Array(bin.length);
+          for (let j = 0; j < bin.length; j++) imageBytes[j] = bin.charCodeAt(j);
+        }
       } else {
+        // Remote URL — fetch as binary
         try {
           const resp = await fetch(imageUrl);
-          if (resp.ok) {
-            outZip.file(mediaName, new Uint8Array(await resp.arrayBuffer()));
-            imageRId = `rId${mediaCounter}`;
-          }
-        } catch { /* skip image */ }
+          if (resp.ok) imageBytes = new Uint8Array(await resp.arrayBuffer());
+        } catch {
+          // CORS or network failure — try via image element → canvas → dataUrl
+          try {
+            const dataUrl = await urlToDataUrlViaCanvas(imageUrl);
+            if (dataUrl) {
+              const b64part = dataUrl.split(",")[1];
+              const bin = atob(b64part);
+              imageBytes = new Uint8Array(bin.length);
+              for (let j = 0; j < bin.length; j++) imageBytes[j] = bin.charCodeAt(j);
+              imageExt = dataUrl.startsWith("data:image/png") ? "png" : "jpg";
+            }
+          } catch { /* give up */ }
+        }
+      }
+
+      if (imageBytes) {
+        outZip.file(mediaName, imageBytes);
+        imageRId = `rId${mediaCounter}`;
       }
     }
 
