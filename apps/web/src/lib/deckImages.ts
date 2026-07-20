@@ -197,22 +197,11 @@ export const LAYOUT_STYLES: Record<ImageLayout, LayoutStyle> = {
 // ---------------------------------------------------------------------------
 
 import type { ProviderKey } from "@/lib/types";
+import { PROVIDER_PRESETS } from "@/lib/providers";
 
-/** Find a fal.ai key from the user's configured AI keys. */
-function findFalKey(keys: ProviderKey[]): string | null {
+function findKeyByKind(keys: ProviderKey[], kind: string): string | null {
   for (const k of keys) {
-    if (k.apiKey && (k.apiKey.startsWith("fal-") || (k.baseUrl ?? "").includes("fal.run"))) {
-      return k.apiKey;
-    }
-  }
-  return null;
-}
-
-/** Find a Runware key from configured AI keys. */
-function findRunwareKey(keys: ProviderKey[]): string | null {
-  for (const k of keys) {
-    if ((k.baseUrl ?? "").includes("runware.ai")) return k.apiKey;
-    if (k.provider === ("runware" as string)) return k.apiKey;
+    if (PROVIDER_PRESETS[k.provider]?.kind === kind && k.apiKey) return k.apiKey;
   }
   return null;
 }
@@ -317,12 +306,12 @@ export async function fetchBestImage(
   ratio?: "16:9" | "4:3" | "1:1" | "3:2" | "2:3" | "9:16",
   aiKeys: ProviderKey[] = []
 ): Promise<ImageResult> {
-  const falKey = findFalKey(aiKeys);
+  const falKey = findKeyByKind(aiKeys, "fal-image");
   if (falKey) {
     const result = await fetchFalImage(prompt, style, ratio, falKey);
     if (result) return result;
   }
-  const runwareKey = findRunwareKey(aiKeys);
+  const runwareKey = findKeyByKind(aiKeys, "runware-image");
   if (runwareKey) {
     const result = await fetchRunwareImage(prompt, style, ratio, runwareKey);
     if (result) return result;

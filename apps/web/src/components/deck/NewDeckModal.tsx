@@ -171,12 +171,21 @@ export default function NewDeckModal({ nodes, pages, onClose, onCreate }: Props)
         const b = parseInt(hex.slice(4, 6) || "0", 16);
         const lum = (r * 299 + g * 587 + b * 114) / 1000;
         const theme: DeckFrontmatter["theme"] = lum < 128 ? "aurora-dark" : "minimal-white";
+
+        // Read file as base64
+        const arrayBuffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = btoa(binary);
+
         setTemplateFm({
           theme,
           accentColor: colors.accent,
           titleColor: colors.titleColor,
           bodyColor: colors.bodyColor,
           ...(colors.font ? { font: colors.font } : {}),
+          templateFileB64: b64,
         });
         setTemplateName(file.name);
       } else {

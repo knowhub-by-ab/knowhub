@@ -35,6 +35,14 @@ export const THEMES: Record<SlideTheme, ThemeSpec> = {
 
 
 export async function exportPptx(deck: PresentationDeck): Promise<void> {
+  // If a template file was stored, delegate to template-based export
+  if (deck.frontmatter.templateFileB64) {
+    const { exportPptxFromTemplate } = await import("./deckTemplateExport");
+    const blob = await exportPptxFromTemplate(deck, deck.frontmatter.templateFileB64);
+    downloadBlob(blob, `${sanitizeFilename(deck.title)}.pptx`);
+    return;
+  }
+
   // Lazy-load PptxGenJS — ~600 KB, only loaded when user clicks "Download PPTX"
   const PptxGenJS = (await import("pptxgenjs")).default;
   const prs = new PptxGenJS();

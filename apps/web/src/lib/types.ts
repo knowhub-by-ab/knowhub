@@ -27,7 +27,12 @@ export type ProviderId =
   | "openrouter"
   | "openai"
   | "puter"
-  | "custom";
+  | "custom"
+  | "fal"
+  | "runware"
+  | "fishaudio"
+  | "elevenlabs"
+  | "resembleai";
 
 /** Role tag for routing AI requests to the right key. */
 export type AiRole = "tree" | "pages" | "assessments" | "other" | "any";
@@ -296,6 +301,12 @@ export interface DeckFrontmatter {
   voiceName?: string;
   speechRate?: number;
   speechPitch?: number;
+  /** Raw POTX/PPTX template file stored as base64 for template-based export. */
+  templateFileB64?: string;
+  /** Cloned voice ID for narration (from Fish Audio, ElevenLabs, or Resemble AI). */
+  clonedVoiceId?: string;
+  /** Provider that created the cloned voice. */
+  clonedVoiceProvider?: "elevenlabs" | "fishaudio" | "resembleai";
 }
 
 export interface PresentationDeck {

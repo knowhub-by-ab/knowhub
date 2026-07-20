@@ -14,6 +14,7 @@ import SlideCard from "@/components/deck/SlideCard";
 import FrontmatterPanel from "@/components/deck/FrontmatterPanel";
 import DeckToolbar from "@/components/deck/DeckToolbar";
 import VoiceSelector from "@/components/deck/VoiceSelector";
+import VoiceClonePanel from "@/components/deck/VoiceClonePanel";
 import LargeFileSaveModal from "@/components/deck/LargeFileSaveModal";
 import DuplicateAssetModal from "@/components/deck/DuplicateAssetModal";
 import type { DuplicateAssetResult } from "@/components/deck/DuplicateAssetModal";
@@ -383,6 +384,15 @@ export default function DeckEditorPage() {
             language={deck.frontmatter.language}
             onChange={handleFrontmatterChange}
           />
+          <div className="border-t border-zinc-800 pt-3">
+            <p className="text-xs font-medium text-zinc-400 mb-2">Voice Cloning</p>
+            <VoiceClonePanel
+              deckId={deck.id}
+              clonedVoiceId={deck.frontmatter.clonedVoiceId}
+              clonedVoiceProvider={deck.frontmatter.clonedVoiceProvider}
+              aiKeys={aiKeys}
+            />
+          </div>
         </div>
       </div>
 
