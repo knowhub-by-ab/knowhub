@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ChevronDown, ChevronUp, Palette } from "lucide-react";
 import type { DeckFrontmatter, SlideTheme, AudienceLevel, NarrationTone, ImageStyle } from "@/lib/deckStore";
 import ThemeGallery from "./ThemeGallery";
@@ -20,6 +20,16 @@ interface Props {
 export default function FrontmatterPanel({ frontmatter, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [showThemes, setShowThemes] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange({ logoUrl: reader.result as string });
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
 
   return (
     <>
@@ -173,6 +183,56 @@ export default function FrontmatterPanel({ frontmatter, onChange }: Props) {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Logo */}
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Logo Overlay</label>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleLogoUpload}
+              />
+              {frontmatter.logoUrl ? (
+                <div className="flex items-center gap-2">
+                  <img src={frontmatter.logoUrl} alt="Logo" style={{ width: 32, height: 32, objectFit: "contain", borderRadius: 4, border: "1px solid #52525b", background: "#18181b" }} />
+                  <button
+                    onClick={() => onChange({ logoUrl: undefined, logoCorner: undefined })}
+                    className="text-xs text-red-400 hover:text-red-300 border border-zinc-700 rounded px-2 py-1"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => logoInputRef.current?.click()}
+                  className="w-full py-1.5 text-xs rounded border border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 transition-colors"
+                >
+                  Upload Logo
+                </button>
+              )}
+              {frontmatter.logoUrl && (
+                <div className="mt-2">
+                  <label className="block text-xs text-zinc-500 mb-1">Corner</label>
+                  <div className="grid grid-cols-2 gap-1">
+                    {(["top-left", "top-right", "bottom-left", "bottom-right"] as const).map((corner) => {
+                      const labels: Record<string, string> = { "top-left": "↖ Top-left", "top-right": "↗ Top-right", "bottom-left": "↙ Bottom-left", "bottom-right": "↘ Bottom-right" };
+                      const selected = (frontmatter.logoCorner ?? "bottom-right") === corner;
+                      return (
+                        <button
+                          key={corner}
+                          onClick={() => onChange({ logoCorner: corner })}
+                          className={`py-1 text-xs rounded border transition-colors ${selected ? "bg-indigo-600 border-indigo-500 text-white" : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500"}`}
+                        >
+                          {labels[corner]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

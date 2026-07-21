@@ -348,9 +348,8 @@ export async function exportPptxFromTemplate(
     let imageExt = "jpg";
     let imageUrl = slide.image?.dataUrl ?? slide.image?.url ?? null;
 
-    // Auto-fetch from Pollinations if this layout has a pic placeholder and
-    // the slide has a prompt but no image yet
-    if (layout.hasPic && !imageUrl && slide.imagePrompt) {
+    // Auto-fetch from Pollinations if the slide has a prompt but no image yet
+    if (!imageUrl && slide.imagePrompt) {
       try {
         const { fetchPollinationsImage } = await import("./deckImages");
         const r = await fetchPollinationsImage(slide.imagePrompt, 1280, 720, deck.frontmatter.imageStyle ?? "illustration");

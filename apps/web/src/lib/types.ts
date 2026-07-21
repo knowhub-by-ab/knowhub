@@ -262,6 +262,8 @@ export interface Slide {
   narrationScript: string;
   /** AI-suggested image prompt; user may edit before fetching. */
   imagePrompt: string;
+  /** Optional highlighted callout — a key stat, quote, or insight (1 sentence). */
+  callout?: string;
   /** Per-slide image style override; overrides DeckFrontmatter.imageStyle when set. */
   imageStyle?: ImageStyle;
   image?: SlideImage;
@@ -310,6 +312,10 @@ export interface DeckFrontmatter {
   clonedVoiceId?: string;
   /** Provider that created the cloned voice. */
   clonedVoiceProvider?: "elevenlabs" | "fishaudio" | "resembleai";
+  /** Logo image as base64 data URL to overlay on every slide. */
+  logoUrl?: string;
+  /** Which corner to place the logo (default: bottom-right). */
+  logoCorner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
 }
 
 export interface PresentationDeck {

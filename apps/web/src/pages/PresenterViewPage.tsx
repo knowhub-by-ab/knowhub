@@ -155,6 +155,8 @@ export default function PresenterViewPage() {
             bodyColor={deck.frontmatter.bodyColor}
             backgroundColor={deck.frontmatter.backgroundColor}
             font={deck.frontmatter.font}
+            logoUrl={deck.frontmatter.logoUrl}
+            logoCorner={deck.frontmatter.logoCorner}
             className="w-full shadow-2xl"
           />
         </div>

@@ -15,6 +15,7 @@ interface RawSlide {
   type: SlideType;
   title: string;
   bullets: string[];
+  callout?: string;
   speakerNotes: string;
   narrationScript: string;
   imagePrompt: string;
@@ -25,23 +26,27 @@ function uid(): string {
 }
 
 function buildOutlineSystemPrompt(fm: DeckFrontmatter): string {
-  return `You are an expert instructional designer. Convert the provided Markdown content into a structured slide deck outline.
+  return `You are a world-class presentation designer (think M365 Copilot, Google Gemini Slides). Convert the provided Markdown into a visually compelling slide deck outline.
 
-Rules:
-- Return ONLY a valid JSON array. No prose, no markdown code fences, no explanation.
-- Aim for ${fm.slideCount ?? 10} slides (±2 is acceptable).
-- Audience level: ${fm.audienceLevel}.
-- Language: ${fm.language === "en" ? "English" : fm.language}. Write ALL text in this language.
-- First slide must have type "title". Last slide must have type "closing".
-- Use type "section" for major chapter dividers (full-color break slides).
-- Use type "content" for regular slides.
-- bullets: plain text only, NO markdown syntax, max 6 bullets per slide, max 12 words per bullet.
-- speakerNotes: detailed notes for the presenter (2-5 sentences). Plain text.
-- narrationScript: natural spoken text for this slide (2-4 sentences). Write as if speaking aloud, not reading bullets.
-- imagePrompt: a concise image description (10-20 words) suitable for an AI image generator. Describe a specific visual that represents this slide's topic.
+CREATIVE RULES — make slides look like a professional deck:
+- Titles should be ACTION-ORIENTED or INSIGHT-DRIVEN (not just topic labels). Examples: "72% of Teams Fail Without This" not "Team Challenges". "Three Steps to Digital Transformation" not "Digital Transformation Steps".
+- bullets: use SPECIFIC, CONCRETE content — statistics, named frameworks, real examples. Avoid vague generic statements. Max 5 bullets per slide, max 15 words each. NO markdown syntax.
+- callout: a single powerful insight, key statistic, or memorable quote for this slide (1 sentence, max 20 words). Leave empty ("") for title/section/closing slides.
+- imagePrompt: a specific, vivid visual description (10-20 words) for an AI image generator. Every content slide MUST have one. Be specific — "a diverse team collaborating around a whiteboard with sticky notes" not "teamwork".
+- speakerNotes: 2-4 sentences of presenter context, data sources, or talking points.
+- narrationScript: 2-4 natural spoken sentences for text-to-speech, as if speaking aloud to an audience.
 
-Return a JSON array where each element matches EXACTLY this schema:
-{"type":"title"|"content"|"section"|"closing","title":string,"bullets":string[],"speakerNotes":string,"narrationScript":string,"imagePrompt":string}`;
+SLIDE TYPES:
+- "title": First slide only. Has subtitle as first bullet.
+- "section": Major chapter dividers — short punchy title, 0-1 bullets.
+- "content": Regular slides. Rich, specific bullets + callout.
+- "closing": Last slide — key takeaways + call to action.
+
+Aim for ${fm.slideCount ?? 10} slides (±2). Audience: ${fm.audienceLevel}. Language: ${fm.language === "en" ? "English" : fm.language}.
+
+Return ONLY a valid JSON array. No prose, no code fences.
+Schema per slide:
+{"type":"title"|"content"|"section"|"closing","title":string,"bullets":string[],"callout":string,"speakerNotes":string,"narrationScript":string,"imagePrompt":string}`;
 }
 
 export async function generateSlideOutline(
@@ -63,6 +68,7 @@ export async function generateSlideOutline(
     speakerNotes: s.speakerNotes ?? "",
     narrationScript: s.narrationScript ?? "",
     imagePrompt: s.imagePrompt ?? "",
+    callout: s.callout ?? "",
     order: i,
   }));
 }

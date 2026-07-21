@@ -83,7 +83,7 @@ export default function SlideCard({
 
       {/* Slide preview thumbnail */}
       <div className="p-3 pb-0">
-        <SlidePreview slide={slide} theme={frontmatter.theme} accentColor={frontmatter.accentColor} titleColor={frontmatter.titleColor} bodyColor={frontmatter.bodyColor} backgroundColor={frontmatter.backgroundColor} font={frontmatter.font} className="w-full" />
+        <SlidePreview slide={slide} theme={frontmatter.theme} accentColor={frontmatter.accentColor} titleColor={frontmatter.titleColor} bodyColor={frontmatter.bodyColor} backgroundColor={frontmatter.backgroundColor} font={frontmatter.font} logoUrl={frontmatter.logoUrl} logoCorner={frontmatter.logoCorner} className="w-full" />
       </div>
 
       {/* Edit fields (shown when selected) */}
@@ -127,6 +127,20 @@ export default function SlideCard({
                   <Plus size={11} /> Add bullet
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Callout */}
+          {slide.type !== "title" && slide.type !== "section" && (
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Key Insight / Callout</label>
+              <input
+                type="text"
+                value={slide.callout ?? ""}
+                onChange={(e) => onChange({ callout: e.target.value })}
+                placeholder="A key stat, quote, or insight…"
+                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-zinc-200 focus:outline-none focus:border-indigo-500"
+              />
             </div>
           )}
 

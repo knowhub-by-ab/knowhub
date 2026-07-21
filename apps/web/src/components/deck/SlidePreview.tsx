@@ -15,9 +15,13 @@ interface Props {
   /** Scale factor for thumbnail rendering (default 1 = full size). */
   scale?: number;
   className?: string;
+  /** Logo image as base64 data URL to overlay on every slide. */
+  logoUrl?: string;
+  /** Which corner to place the logo (default: bottom-right). */
+  logoCorner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
 }
 
-export default function SlidePreview({ slide, theme, accentColor, titleColor, bodyColor, backgroundColor, font, scale = 1, className = "" }: Props) {
+export default function SlidePreview({ slide, theme, accentColor, titleColor, bodyColor, backgroundColor, font, scale = 1, className = "", logoUrl, logoCorner = "bottom-right" }: Props) {
   const t = THEMES[theme] ?? THEMES["aurora-dark"];
   const accent    = accentColor    ?? t.accent;
   const fontFace  = font           ?? t.font;
@@ -45,6 +49,22 @@ export default function SlidePreview({ slide, theme, accentColor, titleColor, bo
     transformOrigin: "top left",
   };
 
+  const logoCornerStyle: React.CSSProperties = logoCorner === "top-left"
+    ? { top: 6, left: 6 }
+    : logoCorner === "top-right"
+    ? { top: 6, right: 6 }
+    : logoCorner === "bottom-left"
+    ? { bottom: 6, left: 6 }
+    : { bottom: 6, right: 6 };
+
+  const logoEl = logoUrl ? (
+    <img
+      src={logoUrl}
+      alt="Logo"
+      style={{ position: "absolute", width: "10%", maxWidth: 40, maxHeight: 40, objectFit: "contain", margin: 6, zIndex: 10, ...logoCornerStyle }}
+    />
+  ) : null;
+
   // Image-only: render the picture as the entire slide, no text overlay.
   if (isImageOnly) {
     return (
@@ -55,6 +75,7 @@ export default function SlidePreview({ slide, theme, accentColor, titleColor, bo
           crossOrigin="anonymous"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: slide.image?.objectFit ?? "contain" }}
         />
+        {logoEl}
       </div>
     );
   }
@@ -81,6 +102,7 @@ export default function SlidePreview({ slide, theme, accentColor, titleColor, bo
             TEMPLATE
           </div>
         )}
+        {logoEl}
       </div>
     );
   }
@@ -140,6 +162,19 @@ export default function SlidePreview({ slide, theme, accentColor, titleColor, bo
                 </li>
               ))}
             </ul>
+            {slide.callout && (
+              <div style={{
+                marginTop: 8,
+                borderLeft: `3px solid ${accent}`,
+                paddingLeft: 8,
+                color: accent,
+                fontSize: "0.8em",
+                fontStyle: "italic",
+                fontWeight: 600,
+              }}>
+                {slide.callout}
+              </div>
+            )}
           </div>
 
           {/* Right-half image (appears after content) */}
@@ -168,6 +203,7 @@ export default function SlidePreview({ slide, theme, accentColor, titleColor, bo
           TEMPLATE
         </div>
       )}
+      {logoEl}
     </div>
   );
 }
