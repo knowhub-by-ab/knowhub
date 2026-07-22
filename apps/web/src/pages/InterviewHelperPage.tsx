@@ -278,23 +278,43 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
   const srSupported = hasSpeechRecognition();
 
   const [listening, setListening] = useState(false);
-  const [interimText, setInterimText] = useState("");
-  const [pendingText, setPendingText] = useState("");    // accumulated final, not yet sent
+  const [interimDisplay, setInterimDisplay] = useState("");   // live interim shown in gray
+  const [pendingDisplay, setPendingDisplay] = useState("");   // committed final shown in yellow
   const [answers, setAnswers] = useState<StreamingAnswer[]>([]);
   const [queueLen, setQueueLen] = useState(0);
+  const [lastHeard, setLastHeard] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [audioLevel, setAudioLevel] = useState(0);           // 0-3 "bars"
 
-  // Refs that closures can read without stale captures
-  const listeningRef = useRef(false);                   // FIX: closures read this, not state
+  // ── Mutable refs (closures always read fresh values) ────────────────────
+  const listeningRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const pendingRef = useRef("");                         // mirrors pendingText state
+  // Separate buffers: finalBuf accumulates confirmed words; interimBuf is the
+  // current in-progress phrase Chrome hasn't committed yet.
+  // KEY INSIGHT: Chrome often keeps words in interim for many seconds before
+  // marking them final, or never marks them final if the session restarts.
+  // We use BOTH when triggering.
+  const finalBufRef = useRef("");
+  const interimBufRef = useRef("");
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boundaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const periodicTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const processingRef = useRef(false);
   const queueRef = useRef<string[]>([]);
   const answerIdRef = useRef(0);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const answerEndRef = useRef<HTMLDivElement>(null);
+  const lastHeardTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [secsSinceHeard, setSecsSinceHeard] = useState<number | null>(null);
+
+  // Track seconds since last heard for "health" indicator
+  useEffect(() => {
+    if (!listening) { setSecsSinceHeard(null); return; }
+    lastHeardTimerRef.current = setInterval(() => {
+      setSecsSinceHeard(lastHeard ? Math.floor((Date.now() - lastHeard) / 1000) : null);
+    }, 1000);
+    return () => { lastHeardTimerRef.current && clearInterval(lastHeardTimerRef.current); };
+  }, [listening, lastHeard]);
 
   // ── Queue processor ─────────────────────────────────────────────────────
   const processQueue = useCallback(async () => {
@@ -307,31 +327,25 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
       const id = ++answerIdRef.current;
       const ts = Date.now();
 
-      // Add streaming placeholder
       setAnswers((prev) => [...prev, { id, question, answer: "", done: false, timestamp: ts }]);
 
-      const systemPrompt = buildSystemPrompt(ctx);
       const messages: ChatMessage[] = [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: buildSystemPrompt(ctx) },
         { role: "user", content: question.trim() },
       ];
 
       try {
         await chatStream(aiKeys, messages, (chunk) => {
-          setAnswers((prev) =>
-            prev.map((a) => (a.id === id ? { ...a, answer: a.answer + chunk } : a))
-          );
+          setAnswers((prev) => prev.map((a) => a.id === id ? { ...a, answer: a.answer + chunk } : a));
           answerEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "AI error";
-        setAnswers((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, answer: `[Error: ${msg}]`, done: true } : a))
-        );
+        setAnswers((prev) => prev.map((a) => a.id === id ? { ...a, answer: `[Error: ${msg}]`, done: true } : a));
         setError(msg);
       }
 
-      setAnswers((prev) => prev.map((a) => (a.id === id ? { ...a, done: true } : a)));
+      setAnswers((prev) => prev.map((a) => a.id === id ? { ...a, done: true } : a));
       setTimeout(() => answerEndRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
     }
 
@@ -339,56 +353,48 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
     setQueueLen(0);
   }, [aiKeys, ctx]);
 
-  // ── Enqueue a question for AI ───────────────────────────────────────────
-  const enqueue = useCallback((raw: string) => {
-    const q = raw.trim();
-    if (!q) return;
-    // Clear pending
-    pendingRef.current = "";
-    setPendingText("");
-    setInterimText("");
+  // ── Enqueue — uses BOTH final and interim buffers ───────────────────────
+  // This is the critical fix: interim text is real speech that Chrome hasn't
+  // committed as "final" yet. Waiting for final means losing most of what's said.
+  const enqueue = useCallback((includeInterim = true) => {
+    const final = finalBufRef.current;
+    const interim = includeInterim ? interimBufRef.current : "";
+    const combined = (final + " " + interim).trim();
+    if (!combined) return;
+
+    finalBufRef.current = "";
+    interimBufRef.current = "";
+    setPendingDisplay("");
+    setInterimDisplay("");
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (boundaryTimerRef.current) clearTimeout(boundaryTimerRef.current);
 
-    queueRef.current.push(q);
+    queueRef.current.push(combined);
     setQueueLen(queueRef.current.length);
     processQueue();
   }, [processQueue]);
 
-  // ── Silence timer — fires 1.5 s after last speech ──────────────────────
+  // ── Silence timer — 2 s after last ANY speech (interim or final) ────────
   const resetSilenceTimer = useCallback(() => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    silenceTimerRef.current = setTimeout(() => {
-      const q = pendingRef.current;
-      if (q.trim()) enqueue(q);
-    }, 1500);
+    silenceTimerRef.current = setTimeout(() => enqueue(true), 2000);
   }, [enqueue]);
 
-  // ── Boundary timer — fires 350 ms after detecting a sentence end ────────
+  // ── Boundary timer — 400 ms after a sentence-ending final segment ───────
   const scheduleBoundaryTrigger = useCallback(() => {
     if (boundaryTimerRef.current) clearTimeout(boundaryTimerRef.current);
-    boundaryTimerRef.current = setTimeout(() => {
-      const q = pendingRef.current;
-      if (q.trim()) enqueue(q);
-    }, 350);
+    boundaryTimerRef.current = setTimeout(() => enqueue(true), 400);
   }, [enqueue]);
 
-  // ── Manual trigger (Answer Now button + Space key) ──────────────────────
-  const triggerNow = useCallback(() => {
-    const q = pendingRef.current;
-    if (q.trim()) enqueue(q);
-  }, [enqueue]);
+  // ── Manual trigger ──────────────────────────────────────────────────────
+  const triggerNow = useCallback(() => enqueue(true), [enqueue]);
 
-  // Space key shortcut (only when not in a text input)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!listeningRef.current) return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.code === "Space") {
-        e.preventDefault();
-        triggerNow();
-      }
+      if (e.code === "Space") { e.preventDefault(); triggerNow(); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -398,68 +404,98 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
   const startListening = useCallback(() => {
     if (!srSupported) return;
     listeningRef.current = true;
+    finalBufRef.current = "";
+    interimBufRef.current = "";
     setListening(true);
     setError(null);
+    setLastHeard(null);
+
+    // Periodic safety flush every 8 s: if Chrome has been silent (no onresult)
+    // but we have interim text, commit it. Handles the case where Chrome stops
+    // firing events mid-session without calling onend.
+    periodicTimerRef.current = setInterval(() => {
+      const hasContent = finalBufRef.current.trim() || interimBufRef.current.trim();
+      if (hasContent) {
+        // Only flush if we haven't heard anything new in 4+ seconds
+        const age = lastHeard ? Date.now() - lastHeard : Infinity;
+        if (age > 4000) enqueue(true);
+      }
+    }, 8000);
 
     function createAndStart() {
+      if (!listeningRef.current) return;
       const rec = createRecognition();
       rec.continuous = true;
       rec.interimResults = true;
       rec.lang = "en-US";
 
       rec.onresult = (event: SpeechRecognitionEvent) => {
-        let interim = "";
+        setLastHeard(Date.now());
+        setAudioLevel(Math.floor(Math.random() * 3) + 1); // visual pulse
+        setTimeout(() => setAudioLevel(0), 400);
+
+        let newInterim = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const r = event.results[i];
           if (r.isFinal) {
             const seg = r[0].transcript;
-            pendingRef.current += seg + " ";
-            setPendingText(pendingRef.current);
-            transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+            finalBufRef.current += seg + " ";
+            // When a final segment arrives, the previous interim is consumed.
+            // Don't double-count it — clear interimBuf.
+            interimBufRef.current = "";
 
-            // Trigger 1: sentence boundary in this segment
-            if (hasBoundary(seg) || hasQuestionPhrase(pendingRef.current)) {
+            // Trigger: sentence boundary
+            if (hasBoundary(seg) || hasQuestionPhrase(finalBufRef.current)) {
               scheduleBoundaryTrigger();
             }
-
-            // Trigger 2: word-count overflow — send after ~45 words accumulate
-            const wordCount = pendingRef.current.trim().split(/\s+/).length;
-            if (wordCount >= 45) {
-              enqueue(pendingRef.current);
-              return;
-            }
-
-            // Trigger 3: silence (reset timer on every final segment)
-            resetSilenceTimer();
+            // Trigger: word overflow (final words only — more reliable)
+            const wc = finalBufRef.current.trim().split(/\s+/).length;
+            if (wc >= 40) { enqueue(true); return; }
           } else {
-            interim += r[0].transcript;
+            newInterim += r[0].transcript;
           }
         }
-        setInterimText(interim);
-        if (interim) resetSilenceTimer();
+
+        // Always store latest interim — this is speech Chrome heard but hasn't
+        // committed. We'll include it in the next trigger.
+        interimBufRef.current = newInterim;
+        setPendingDisplay(finalBufRef.current);
+        setInterimDisplay(newInterim);
+        transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+
+        // Trigger: word overflow counting interim too
+        const totalWords = (finalBufRef.current + " " + newInterim).trim().split(/\s+/).length;
+        if (totalWords >= 50) { enqueue(true); return; }
+
+        resetSilenceTimer();
       };
 
       rec.onerror = (e) => {
-        // 'no-speech' is harmless — browser times out after silence; restart
         const evErr = (e as unknown as { error?: string }).error;
-        if (evErr === "no-speech" || evErr === "aborted") {
-          // will auto-restart via onend
-          return;
-        }
-        setError("Microphone error — check permissions.");
+        if (evErr === "no-speech" || evErr === "aborted") return; // harmless, onend restarts
+        setError("Mic error — check permissions and try again.");
         listeningRef.current = false;
         setListening(false);
       };
 
-      // KEY FIX: read listeningRef (mutable), not `listening` state (stale closure)
+      // onend: flush whatever interim we had (Chrome resets its buffer on restart)
+      // then immediately restart so there's no gap.
       rec.onend = () => {
+        // Flush interim before restarting — it will be lost otherwise
+        if (interimBufRef.current.trim()) {
+          finalBufRef.current += interimBufRef.current + " ";
+          interimBufRef.current = "";
+          setPendingDisplay(finalBufRef.current);
+          setInterimDisplay("");
+        }
         if (listeningRef.current) {
-          try { createAndStart(); } catch { /* ignore */ }
+          // Small delay avoids "already started" errors in some browsers
+          setTimeout(() => createAndStart(), 100);
         }
       };
 
       recognitionRef.current = rec;
-      try { rec.start(); } catch { /* already started or permissions denied */ }
+      try { rec.start(); } catch { /* ignore — onend will retry */ }
     }
 
     createAndStart();
@@ -470,17 +506,20 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
     setListening(false);
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (boundaryTimerRef.current) clearTimeout(boundaryTimerRef.current);
+    if (periodicTimerRef.current) clearInterval(periodicTimerRef.current);
     recognitionRef.current?.abort();
     recognitionRef.current = null;
-    setInterimText("");
+    setInterimDisplay("");
+    setAudioLevel(0);
   }, []);
 
   const clearSession = useCallback(() => {
     stopListening();
     setAnswers([]);
-    setPendingText("");
-    setInterimText("");
-    pendingRef.current = "";
+    setPendingDisplay("");
+    setInterimDisplay("");
+    finalBufRef.current = "";
+    interimBufRef.current = "";
     queueRef.current = [];
     setQueueLen(0);
     setError(null);
@@ -492,6 +531,7 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
       listeningRef.current = false;
       silenceTimerRef.current && clearTimeout(silenceTimerRef.current);
       boundaryTimerRef.current && clearTimeout(boundaryTimerRef.current);
+      periodicTimerRef.current && clearInterval(periodicTimerRef.current);
       recognitionRef.current?.abort();
     };
   }, []);
@@ -502,26 +542,41 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
         <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
         <div>
           <p className="font-semibold">Speech recognition not supported</p>
-          <p className="text-sm mt-1">
-            Use Chrome or Edge for Live mode. Practice mode still works in all browsers.
-          </p>
+          <p className="text-sm mt-1">Use Chrome or Edge for Live mode. Practice mode still works in all browsers.</p>
         </div>
       </div>
     );
   }
 
   const hasAnswering = answers.some((a) => !a.done);
+  const hasPending = pendingDisplay.trim() || interimDisplay.trim();
+
+  // Health indicator colour
+  const healthColor = !listening ? "text-gray-500"
+    : secsSinceHeard === null || secsSinceHeard < 3 ? "text-green-400"
+    : secsSinceHeard < 8 ? "text-yellow-400"
+    : "text-red-400";
+  const healthLabel = !listening ? "Idle"
+    : secsSinceHeard === null ? "Listening…"
+    : secsSinceHeard < 3 ? "Hearing audio"
+    : `Last heard ${secsSinceHeard}s ago`;
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      {/* Controls bar */}
+      {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Status badge */}
-        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
-          listening ? "bg-red-900/60 text-red-300 border-red-700" : "bg-gray-700 text-gray-400 border-gray-600"
-        }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${listening ? "bg-red-400 animate-pulse" : "bg-gray-500"}`} />
-          {listening ? "Listening…" : "Idle"}
+        {/* Health badge */}
+        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-current/30 ${healthColor}`}>
+          <span className={`w-1.5 h-1.5 rounded-full bg-current ${listening && (secsSinceHeard === null || secsSinceHeard < 3) ? "animate-pulse" : ""}`} />
+          {healthLabel}
+          {/* Audio level bars */}
+          {listening && (
+            <span className="flex items-end gap-[2px] ml-1 h-3">
+              {[1,2,3].map((b) => (
+                <span key={b} className={`w-[3px] rounded-sm transition-all duration-150 ${audioLevel >= b ? "bg-current h-3" : "bg-current/20 h-1"}`} />
+              ))}
+            </span>
+          )}
         </span>
 
         <button
@@ -533,8 +588,7 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
           {listening ? <><Square className="w-4 h-4" /> Stop</> : <><Mic className="w-4 h-4" /> Start Listening</>}
         </button>
 
-        {/* Answer Now — manual trigger */}
-        {listening && pendingText.trim() && (
+        {listening && hasPending && (
           <button
             onClick={triggerNow}
             className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -551,75 +605,65 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
           </span>
         )}
 
-        <button
-          onClick={clearSession}
-          className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
+        <button onClick={clearSession} className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <RotateCcw className="w-4 h-4" /> Clear
         </button>
 
-        {error && (
-          <span className="text-xs text-red-400 flex items-center gap-1">
-            <AlertCircle className="w-3.5 h-3.5" /> {error}
-          </span>
-        )}
+        {error && <span className="text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> {error}</span>}
       </div>
 
-      {/* Trigger hint */}
       {listening && (
-        <p className="text-[11px] text-gray-500">
-          AI auto-responds on: silence (1.5 s) · question mark detected · 45+ words · or press <kbd className="bg-gray-700 px-1.5 py-0.5 rounded text-gray-300">Space</kbd>
-        </p>
+        <div className="text-[11px] text-gray-500 flex items-center gap-2">
+          <span>Auto-answers on: <strong className="text-gray-400">2s silence</strong> · <strong className="text-gray-400">? detected</strong> · <strong className="text-gray-400">50 words</strong></span>
+          <span>·</span>
+          <span>Manual: <kbd className="bg-gray-700 px-1.5 py-0.5 rounded text-gray-300">Space</kbd> or "Answer Now"</span>
+          <span>·</span>
+          <span className="text-amber-400/80">Interim text (gray) is captured too — not just final words</span>
+        </div>
       )}
 
       {/* Split view */}
       <div className="flex gap-4" style={{ minHeight: "460px" }}>
-        {/* Left — Transcript (40%) */}
+        {/* Left — Transcript */}
         <div className="w-2/5 flex flex-col border border-gray-700 rounded-xl overflow-hidden" style={{ background: "#141820" }}>
-          <div className="px-4 py-2.5 border-b border-gray-700 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            Transcript
+          <div className="px-4 py-2.5 border-b border-gray-700 text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center justify-between">
+            <span>Transcript</span>
+            {listening && audioLevel > 0 && <span className="text-green-400 text-[10px] animate-pulse">● receiving</span>}
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm" style={{ maxHeight: "420px" }}>
-            {/* Processed questions from history */}
             {answers.map((a) => (
               <div key={a.id} className="pb-2 border-b border-gray-700/40 last:border-0">
                 <span className="text-[10px] text-gray-600">{new Date(a.timestamp).toLocaleTimeString()}</span>
-                <p className="text-gray-300 mt-0.5">{a.question}</p>
+                <p className="text-gray-400 mt-0.5">{a.question}</p>
               </div>
             ))}
-            {/* Currently accumulating */}
-            {pendingText && (
-              <p className="text-yellow-200/90 font-medium">{pendingText}</p>
-            )}
-            {interimText && (
-              <p className="text-gray-500 italic">{interimText}</p>
-            )}
-            {!pendingText && !interimText && answers.length === 0 && (
-              <p className="text-gray-600 text-xs">Start listening — transcript appears here in real time.</p>
+            {/* Final (confirmed) text — yellow */}
+            {pendingDisplay && <p className="text-yellow-200/90 font-medium">{pendingDisplay}</p>}
+            {/* Interim text — gray italic. Chrome hears this but hasn't committed it yet.
+                We now capture it on trigger so nothing is lost. */}
+            {interimDisplay && <p className="text-gray-500 italic">{interimDisplay}</p>}
+            {!pendingDisplay && !interimDisplay && answers.length === 0 && (
+              <p className="text-gray-600 text-xs">Start listening — transcript appears here. Yellow = confirmed, gray = in progress.</p>
             )}
             <div ref={transcriptEndRef} />
           </div>
         </div>
 
-        {/* Right — AI Answers (60%) */}
+        {/* Right — AI Answers */}
         <div className="w-3/5 flex flex-col bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-700 text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center justify-between">
             <span>AI Response</span>
             {hasAnswering && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />}
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-5 text-sm" style={{ maxHeight: "420px" }}>
-            {answers.length === 0 && (
-              <p className="text-gray-600 text-xs">AI answers appear here as questions are detected.</p>
-            )}
+            {answers.length === 0 && <p className="text-gray-600 text-xs">AI answers appear here as questions are detected.</p>}
             {answers.map((a) => (
               <div key={a.id} className="pb-4 border-b border-gray-700/40 last:border-0">
                 <p className="text-[10px] text-gray-500 mb-1">{new Date(a.timestamp).toLocaleTimeString()}</p>
                 <p className="text-[11px] text-gray-400 italic mb-2 line-clamp-2">↳ {a.question}</p>
                 <p className="text-gray-100 leading-relaxed whitespace-pre-wrap">
                   {a.answer}
-                  {!a.done && (
-                    <span className="inline-block w-1.5 h-4 bg-blue-400 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
-                  )}
+                  {!a.done && <span className="inline-block w-1.5 h-4 bg-blue-400 animate-pulse ml-0.5 align-text-bottom rounded-sm" />}
                 </p>
               </div>
             ))}
