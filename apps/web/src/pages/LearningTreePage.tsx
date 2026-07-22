@@ -19,6 +19,7 @@ import {
   Upload,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
+import CascadingNodePicker from "@/components/CascadingNodePicker";
 import { proposeNewTree, proposeTreeChanges, proposeTreeImprovements, applyTreeProposals } from "@/lib/aiActions";
 import type { TreeImproveScope } from "@/lib/aiActions";
 import type { TreeProposal } from "@/lib/aiActions";
@@ -538,51 +539,26 @@ export default function LearningTreePage() {
             {improveRootId && (
               <div>
                 <label className="mb-1 block text-xs text-slate-400">Start node <span className="text-slate-500">(optional — narrow to a subtree)</span></label>
-                <select
+                <CascadingNodePicker
+                  nodes={data.nodes}
                   value={improveStartId}
-                  onChange={(e) => { setImproveStartId(e.target.value); setImproveEndId(""); }}
-                  className="w-full rounded-lg border border-white/15 bg-slate-800 px-2 py-1.5 text-xs text-white outline-none focus:border-brand-500"
-                >
-                  <option value="">Whole tree</option>
-                  {flat
-                    .filter((e) => {
-                      // Only show nodes inside the selected root
-                      let n: typeof e.node | undefined = e.node;
-                      while (n) {
-                        if (n.id === improveRootId) return true;
-                        n = data.nodes.find((x) => x.id === n!.parentId);
-                      }
-                      return false;
-                    })
-                    .map(({ node, depth }) => (
-                      <option key={node.id} value={node.id}>{"  ".repeat(depth)}{node.title}</option>
-                    ))}
-                </select>
+                  onChange={(v) => { setImproveStartId(v); setImproveEndId(""); }}
+                  placeholder="Whole tree"
+                  rootId={improveRootId}
+                />
               </div>
             )}
             {/* Optional: end node (depth ceiling) */}
             {improveRootId && (
               <div>
                 <label className="mb-1 block text-xs text-slate-400">End node depth <span className="text-slate-500">(optional — sets max depth)</span></label>
-                <select
+                <CascadingNodePicker
+                  nodes={data.nodes}
                   value={improveEndId}
-                  onChange={(e) => setImproveEndId(e.target.value)}
-                  className="w-full rounded-lg border border-white/15 bg-slate-800 px-2 py-1.5 text-xs text-white outline-none focus:border-brand-500"
-                >
-                  <option value="">No limit</option>
-                  {flat
-                    .filter((e) => {
-                      let n: typeof e.node | undefined = e.node;
-                      while (n) {
-                        if (n.id === improveRootId) return true;
-                        n = data.nodes.find((x) => x.id === n!.parentId);
-                      }
-                      return false;
-                    })
-                    .map(({ node, depth }) => (
-                      <option key={node.id} value={node.id}>{"  ".repeat(depth)}{node.title}</option>
-                    ))}
-                </select>
+                  onChange={setImproveEndId}
+                  placeholder="No limit"
+                  rootId={improveRootId}
+                />
               </div>
             )}
             <button

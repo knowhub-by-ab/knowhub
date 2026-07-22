@@ -18,6 +18,7 @@ import {
   MessagesSquare,
   Volume2,
   Mic,
+  Presentation,
   type LucideIcon,
 } from "lucide-react";
 
@@ -58,11 +59,15 @@ const STEPS: Step[] = [
         add sub-topics, rename, or delete. Click a status chip to cycle Pending → In progress →
         Completed. Use <b>A · Free-style Prompt</b> for a plain description, or{" "}
         <b>B · Structured Prompt</b> to pick skill level (Absolute Novice → Industry Standards)
-        and writing style. The <b>Improve Tree</b> button asks AI to find gaps and suggest what
-        to add.
+        and writing style. Upload a <b>PDF/DOCX syllabus</b> to auto-generate a tree from it.
+        The <b>Improve Tree</b> panel lets you scope improvements to a specific subtree using the
+        cascading node pickers — select a root, then optionally narrow to a start node and depth
+        limit. All AI suggestions appear in a <b>proposal review panel</b> where you toggle
+        which ones to accept before they're added.
       </>
     ),
     to: "/app/learning-tree",
+    tag: "Updated",
   },
   {
     icon: FileText,
@@ -88,7 +93,10 @@ const STEPS: Step[] = [
         Click <b>Listen</b> on any Learning Page to start reading it aloud using your browser's
         built-in text-to-speech. A <b>persistent player bar</b> appears at the bottom of the
         screen with full controls: play/pause, stop, ⏪ rewind 30 s, ⏩ fast-forward 30 s,
-        speed selector (0.5× → 2×), and voice selector. The player stays until you click Stop.
+        speed selector (0.5× → 2×), and voice selector. On Android, <b>lock-screen media
+        controls</b> appear automatically via the Media Session API. Configure a{" "}
+        <b>global cloned voice</b> (ElevenLabs, Fish Audio, or Resemble AI) in Settings to use
+        a realistic voice across all decks and podcasts.
       </>
     ),
     to: "/app/learning-pages",
@@ -103,7 +111,9 @@ const STEPS: Step[] = [
         roots are shown collapsed — tap to expand a section and see its episodes. Each episode
         shows its estimated reading time and your listen progress. Press <b>Play</b> (or{" "}
         <b>Resume</b> if you've started before) to begin. The now-playing banner gives you{" "}
-        <b>Prev / Next</b> controls to move between episodes without going back to the list.
+        <b>Prev / Next</b> controls to move between episodes. Click the <b>Download</b> button
+        next to any episode to save it as an audio file — KnowHub tries Puter TTS (MP3) first,
+        then captures your browser's tab audio via screen share as a fallback.
       </>
     ),
     to: "/app/podcast",
@@ -139,9 +149,10 @@ const STEPS: Step[] = [
     title: "9. Review with Flashcards",
     body: (
       <>
-        In <b>Flashcards</b>, pick a Learning Page and generate a flashcard deck. Review in
-        flip-card mode with Prev / Next / Shuffle. Decks are grouped by page and saved
-        permanently.
+        In <b>Flashcards</b>, pick a Learning Page using the cascading topic picker and generate
+        a flashcard deck. Review in flip-card mode with Prev / Next / Shuffle. Decks are grouped
+        by page and saved permanently. <b>Rename</b> any deck with the pencil icon and{" "}
+        <b>reorder</b> decks with the up/down arrows.
       </>
     ),
     to: "/app/flashcards",
@@ -151,10 +162,11 @@ const STEPS: Step[] = [
     title: "10. Find YouTube videos",
     body: (
       <>
-        In <b>Videos</b>, enter a topic or select a Learning Page and AI suggests relevant
-        YouTube videos under 20 minutes. Videos are validated for existence (using YouTube Data
-        API if configured, oEmbed otherwise). Watch in-app, bookmark what you like, discard the
-        rest.
+        In <b>Videos</b>, enter a topic or select a Learning Page (using the cascading topic
+        picker) and AI suggests relevant YouTube videos under 20 minutes. Watch in-app, bookmark
+        what you like, discard the rest. Organise saved videos into <b>playlists</b> using the
+        sidebar — create named playlists, reorder videos within them with the arrow buttons, and
+        add any video to multiple playlists from the playlist icon.
       </>
     ),
     to: "/app/videos",
@@ -211,28 +223,47 @@ const STEPS: Step[] = [
     body: (
       <>
         Jot anything in your global <b>Notes</b> notebook (multiple titled notes, Markdown). Save
-        useful docs, articles, videos, and courses in <b>Resources</b> — free sources are always
-        shown first.
+        useful docs, articles, videos, and courses in <b>Resources</b>. Organise resources into
+        named <b>collections</b> using the sidebar — create, rename, reorder, and delete
+        collections, then filter the resource list by collection.
       </>
     ),
     to: "/app/notes",
   },
   {
+    icon: Presentation,
+    title: "16. Create Presentations",
+    body: (
+      <>
+        The <b>Presentations</b> tab lets you create slide decks from any Learning Page or
+        Markdown document. Use the <b>MD Editor</b> tab to paste/upload content, edit it with AI
+        chat, and click <b>Generate Slides →</b> to produce a full deck. Use{" "}
+        <code className="rounded bg-white/10 px-1 text-xs">{"<!-- layout: \"two-column\" -->"}</code>{" "}
+        directives in Markdown to hint slide layouts. Choose from 8 built-in themes or upload a{" "}
+        <b>PPTX/POTX template</b> (Templates tab) for brand-consistent slides. Import an
+        existing PPTX to edit it, or export any deck as a .pptx file.
+      </>
+    ),
+    to: "/app/presentations",
+    tag: "New",
+  },
+  {
     icon: GitBranch,
-    title: "16. Back up to GitHub",
+    title: "18. Back up to GitHub",
     body: (
       <>
         In <b>Repository</b>, connect your GitHub account and press <b>Sync to GitHub</b> to
         save a portable copy (Markdown pages + JSON snapshot) to your own private repo — your
         knowledge, fully owned by you. Use <b>Import from GitHub</b> to restore on any device.
-        The sync button in the header keeps both directions up to date.
+        The header sync button keeps both directions up to date. <b>Auto-sync</b> fires
+        automatically 10 s after any change when GitHub is connected.
       </>
     ),
     to: "/app/repository",
   },
   {
     icon: Smartphone,
-    title: "17. Use it on Android",
+    title: "19. Use it on Android",
     body: (
       <>
         Download the Android app from the "Download Android App" button on the home page or from
@@ -246,6 +277,8 @@ const STEPS: Step[] = [
 const TAG_COLORS: Record<string, string> = {
   TTS: "bg-violet-500/20 text-violet-300 ring-violet-500/30",
   Podcast: "bg-brand-500/20 text-brand-300 ring-brand-500/30",
+  New: "bg-emerald-500/20 text-emerald-300 ring-emerald-500/30",
+  Updated: "bg-amber-500/20 text-amber-300 ring-amber-500/30",
 };
 
 export default function GuidePage() {

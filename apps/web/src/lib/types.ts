@@ -220,6 +220,8 @@ export interface AppData {
   highlights: Highlight[];
   /** YouTube video recommendations. */
   videos: VideoRec[];
+  /** Video playlists (ordered groupings of VideoRecs). */
+  videoPlaylists: VideoPlaylist[];
   /** Chat session folders. */
   chatFolders: ChatFolder[];
   /** Puter API token for TTS/MP3 download (stored locally only, never synced). */
@@ -228,6 +230,17 @@ export interface AppData {
   clonedVoiceId?: string;
   /** Provider that produced the global cloned voice. */
   clonedVoiceProvider?: "elevenlabs" | "fishaudio" | "resembleai";
+}
+
+export interface VideoPlaylist {
+  id: string;
+  name: string;
+  /** Optional tree node this playlist is linked to. */
+  nodeId?: string;
+  /** Ordered VideoRec ids. */
+  videoIds: string[];
+  order: number;
+  createdAt: number;
 }
 
 export interface VideoRec {
@@ -245,6 +258,22 @@ export interface VideoRec {
   validated: boolean;
   /** User kept this rec (vs. discarded). */
   kept: boolean;
+  createdAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// Presentation Templates (PPTX / POTX base files)
+// ---------------------------------------------------------------------------
+
+export interface PptTemplate {
+  id: string;
+  name: string;
+  /** Base64-encoded .pptx/.potx file. */
+  fileB64: string;
+  /** Background color extracted from the template (hex). */
+  backgroundColor?: string;
+  /** Detected accent color (hex). */
+  accentColor?: string;
   createdAt: number;
 }
 

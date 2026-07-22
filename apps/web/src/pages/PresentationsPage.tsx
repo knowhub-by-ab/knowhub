@@ -2,7 +2,7 @@ import { useState, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Presentation, FolderOpen, Trash2, Play,
-  Download, Search, Upload,
+  Download, Search, Upload, LayoutTemplate, Pencil, Check, X,
 } from "lucide-react";
 
 const MdGuidePage = lazy(() => import("@/pages/MdGuidePage"));
@@ -10,16 +10,19 @@ const MdEditorTab = lazy(() => import("@/components/deck/MdEditorTab"));
 import { useDeckStore, decks as deckOps, collections as colOps } from "@/lib/deckStore";
 import type { PresentationDeck, Collection, CollectionType } from "@/lib/deckStore";
 import { useAppData } from "@/lib/store";
+import { useTemplates, templates as tplOps } from "@/lib/templateStore";
 import { exportPptx, THEMES } from "@/lib/deckExport";
 import NewDeckModal from "@/components/deck/NewDeckModal";
 
-type Tab = "decks" | "collections" | "guide" | "md-editor";
+type Tab = "decks" | "collections" | "guide" | "md-editor" | "templates";
 type SortKey = "newest" | "oldest" | "title";
 
 export default function PresentationsPage() {
   const navigate = useNavigate();
   const { decks, collections } = useDeckStore();
   const { nodes, pages } = useAppData();
+  const tplList = useTemplates();
+  const tplFileRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<Tab>("decks");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
@@ -72,6 +75,19 @@ export default function PresentationsPage() {
     }
   }
 
+  async function handleImportTemplate(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64 = (reader.result as string).split(",")[1] ?? "";
+      const name = file.name.replace(/\.(pptx|potx|ppt)$/i, "");
+      tplOps.add(name, b64);
+    };
+    reader.readAsDataURL(file);
+  }
+
   function handleCreateCollection() {
     if (!newColName.trim()) return;
     colOps.create(newColName, newColType);
@@ -95,6 +111,7 @@ export default function PresentationsPage() {
             <Upload size={14} /> Import PPTX
           </button>
           <input ref={fileRef} type="file" accept=".pptx,.potx,.ppt" className="hidden" onChange={handleImportPptx} />
+          <input ref={tplFileRef} type="file" accept=".pptx,.potx,.ppt" className="hidden" onChange={handleImportTemplate} />
           <button
             onClick={() => setShowNew(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white transition-colors"
@@ -129,6 +146,12 @@ export default function PresentationsPage() {
           className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${tab === "md-editor" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
         >
           MD Editor
+        </button>
+        <button
+          onClick={() => setTab("templates")}
+          className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${tab === "templates" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+        >
+          Templates ({tplList.length})
         </button>
       </div>
 
@@ -181,6 +204,13 @@ export default function PresentationsPage() {
               <MdEditorTab />
             </Suspense>
           </div>
+        )}
+
+        {tab === "templates" && (
+          <TemplateLibrary
+            templates={tplList}
+            onImport={() => tplFileRef.current?.click()}
+          />
         )}
 
         {tab === "decks" && (
@@ -352,6 +382,72 @@ function CollectionCard({ collection, decks, onOpen }: CollectionCardProps) {
           <p className="text-xs text-zinc-500 capitalize">{collection.type} · {collection.items.length} items</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Template Library
+// ---------------------------------------------------------------------------
+import type { PptTemplate } from "@/lib/types";
+
+function TemplateLibrary({ templates, onImport }: { templates: PptTemplate[]; onImport: () => void }) {
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  return (
+    <div className="py-2">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-zinc-400">Upload PPTX/POTX files as reusable templates for new decks.</p>
+        <button onClick={onImport}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white transition-colors">
+          <Upload size={14} /> Upload template
+        </button>
+      </div>
+
+      {templates.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-48 text-zinc-600 border border-dashed border-zinc-700 rounded-xl">
+          <LayoutTemplate size={36} className="mb-3 opacity-40" />
+          <p className="text-sm">No templates yet.</p>
+          <button onClick={onImport} className="mt-2 text-indigo-400 hover:text-indigo-300 text-sm">Upload your first template →</button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {templates.map((tpl) => (
+            <div key={tpl.id} className="group rounded-xl border border-zinc-800 hover:border-zinc-600 bg-zinc-900 overflow-hidden transition-all">
+              <div className="h-24 flex items-center justify-center"
+                style={{ backgroundColor: tpl.backgroundColor ?? "#1e1e2e" }}>
+                <LayoutTemplate size={32} style={{ color: tpl.accentColor ?? "#6366f1", opacity: 0.7 }} />
+              </div>
+              <div className="p-3 flex items-center gap-2">
+                {renamingId === tpl.id ? (
+                  <>
+                    <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && draft.trim()) { tplOps.rename(tpl.id, draft.trim()); setRenamingId(null); }
+                        if (e.key === "Escape") setRenamingId(null);
+                      }}
+                      className="flex-1 rounded border border-zinc-600 bg-zinc-800 px-2 py-0.5 text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                    <button onClick={() => { if (draft.trim()) tplOps.rename(tpl.id, draft.trim()); setRenamingId(null); }}
+                      className="text-indigo-400"><Check size={13} /></button>
+                    <button onClick={() => setRenamingId(null)} className="text-zinc-500"><X size={13} /></button>
+                  </>
+                ) : (
+                  <>
+                    <p className="flex-1 text-sm font-medium text-zinc-200 truncate">{tpl.name}</p>
+                    <div className="hidden group-hover:flex items-center gap-1">
+                      <button onClick={() => { setRenamingId(tpl.id); setDraft(tpl.name); }}
+                        className="p-1 text-zinc-500 hover:text-zinc-200"><Pencil size={12} /></button>
+                      <button onClick={() => tplOps.remove(tpl.id)}
+                        className="p-1 text-zinc-500 hover:text-red-400"><Trash2 size={12} /></button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

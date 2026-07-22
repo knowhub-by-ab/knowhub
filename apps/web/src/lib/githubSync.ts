@@ -44,6 +44,7 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
       questionBanks: mergeById(local.questionBanks, remote.questionBanks),
       chatSessions: mergeById(local.chatSessions, remote.chatSessions),
       videos: mergeById(local.videos, remote.videos),
+      videoPlaylists: mergeById(local.videoPlaylists ?? [], (remote as { videoPlaylists?: typeof local.videoPlaylists }).videoPlaylists ?? []),
       highlights: mergeById(local.highlights, remote.highlights),
       chatFolders: mergeById(local.chatFolders ?? [], remote.chatFolders ?? []),
       clonedVoiceId: local.clonedVoiceId ?? (remote as { clonedVoiceId?: string }).clonedVoiceId,

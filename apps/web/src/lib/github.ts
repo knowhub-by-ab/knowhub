@@ -124,6 +124,7 @@ export interface KnowHubExport {
   questionBanks: AppData["questionBanks"];
   chatSessions: AppData["chatSessions"];
   videos: AppData["videos"];
+  videoPlaylists: AppData["videoPlaylists"];
   highlights: AppData["highlights"];
   chatFolders: AppData["chatFolders"];
   clonedVoiceId?: string;
@@ -145,6 +146,7 @@ export function buildExport(data: AppData): KnowHubExport {
     questionBanks: data.questionBanks,
     chatSessions: data.chatSessions,
     videos: data.videos,
+    videoPlaylists: data.videoPlaylists ?? [],
     highlights: data.highlights,
     chatFolders: data.chatFolders,
     clonedVoiceId: data.clonedVoiceId,

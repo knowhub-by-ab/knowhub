@@ -20,6 +20,7 @@ import type {
   Flashcard,
   Highlight,
   VideoRec,
+  VideoPlaylist,
   ResourceCollection,
 } from "./types";
 
@@ -47,6 +48,7 @@ const DEFAULT_DATA: AppData = {
   resourceCollections: [],
   highlights: [],
   videos: [],
+  videoPlaylists: [],
   chatFolders: [],
   puterApiToken: undefined,
 };
@@ -97,6 +99,7 @@ function load(): AppData {
       resourceCollections: parsed.resourceCollections ?? [],
       highlights: parsed.highlights ?? [],
       videos: parsed.videos ?? [],
+      videoPlaylists: parsed.videoPlaylists ?? [],
       chatFolders: parsed.chatFolders ?? [],
     };
   } catch {
@@ -202,6 +205,7 @@ function merged(next: Partial<AppData>): AppData {
     resourceCollections: next.resourceCollections ?? [],
     highlights: next.highlights ?? [],
     videos: next.videos ?? [],
+    videoPlaylists: next.videoPlaylists ?? [],
     chatFolders: next.chatFolders ?? [],
     // Preserve local-only fields — puterApiToken is never in remote exports
     puterApiToken: next.puterApiToken ?? state?.puterApiToken,
@@ -668,6 +672,56 @@ export const videos = {
       ...prev,
       videos: prev.videos.filter((v) => v.kept || (pageId !== undefined && v.pageId !== pageId)),
     }));
+  },
+};
+
+// --- Video Playlists --------------------------------------------------------
+
+export const videoPlaylists = {
+  create(name: string, nodeId?: string): VideoPlaylist {
+    const pl: VideoPlaylist = { id: uid(), name, nodeId, videoIds: [], order: Date.now(), createdAt: Date.now() };
+    setState((prev) => ({ ...prev, videoPlaylists: [...prev.videoPlaylists, pl] }));
+    return pl;
+  },
+  rename(id: string, name: string) {
+    setState((prev) => ({ ...prev, videoPlaylists: prev.videoPlaylists.map((p) => (p.id === id ? { ...p, name } : p)) }));
+  },
+  remove(id: string) {
+    setState((prev) => ({ ...prev, videoPlaylists: prev.videoPlaylists.filter((p) => p.id !== id) }));
+  },
+  addVideo(id: string, videoId: string) {
+    setState((prev) => ({
+      ...prev,
+      videoPlaylists: prev.videoPlaylists.map((p) =>
+        p.id === id && !p.videoIds.includes(videoId) ? { ...p, videoIds: [...p.videoIds, videoId] } : p
+      ),
+    }));
+  },
+  removeVideo(id: string, videoId: string) {
+    setState((prev) => ({
+      ...prev,
+      videoPlaylists: prev.videoPlaylists.map((p) =>
+        p.id === id ? { ...p, videoIds: p.videoIds.filter((v) => v !== videoId) } : p
+      ),
+    }));
+  },
+  moveVideo(id: string, videoId: string, direction: "up" | "down") {
+    setState((prev) => ({
+      ...prev,
+      videoPlaylists: prev.videoPlaylists.map((p) => {
+        if (p.id !== id) return p;
+        const idx = p.videoIds.indexOf(videoId);
+        if (idx < 0) return p;
+        const arr = [...p.videoIds];
+        const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= arr.length) return p;
+        [arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]];
+        return { ...p, videoIds: arr };
+      }),
+    }));
+  },
+  setNodeId(id: string, nodeId: string | undefined) {
+    setState((prev) => ({ ...prev, videoPlaylists: prev.videoPlaylists.map((p) => (p.id === id ? { ...p, nodeId } : p)) }));
   },
 };
 
