@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import {
   useCourses,
   courseOps,
@@ -23,7 +25,6 @@ import {
   Trash2,
   BookOpen,
   ClipboardCheck,
-  FileText,
   X,
   Check,
 } from "lucide-react";
@@ -361,6 +362,23 @@ function ModuleSection({
           {mod.videoIds.length === 0 && (
             <p className="text-xs text-gray-500 px-2 py-1 italic">No videos</p>
           )}
+
+          {/* Module Quiz — always shown after module videos */}
+          {mod.quizId ? (
+            <Link
+              to={`/app/assessments?quizId=${mod.quizId}`}
+              className="flex items-center gap-1.5 px-2 py-1.5 mt-1 rounded text-xs text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/30 transition-colors border border-indigo-800/40"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ClipboardCheck size={12} />
+              Module Quiz
+            </Link>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2 py-1.5 mt-1 rounded text-xs text-gray-600 italic">
+              <ClipboardCheck size={12} />
+              Quiz generating…
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -381,34 +399,12 @@ function NotesTab({ mod, pages }: { mod: YTCourseModule; pages: Record<string, s
       </div>
     );
   }
+  const html = DOMPurify.sanitize(marked.parse(content) as string);
   return (
-    <pre className="whitespace-pre-wrap text-sm text-gray-200 font-sans leading-relaxed p-1">
-      {content}
-    </pre>
-  );
-}
-
-function ModuleQuizTab({ mod }: { mod: YTCourseModule }) {
-  if (!mod.quizId) {
-    return (
-      <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
-        <ClipboardCheck size={28} className="opacity-40" />
-        <p className="text-sm">Quiz not generated yet.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col items-center justify-center h-40 gap-3">
-      <ClipboardCheck size={32} className="text-indigo-400" />
-      <p className="text-sm text-gray-300">Ready to test your module knowledge?</p>
-      <Link
-        to={`/app/assessments?quizId=${mod.quizId}`}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
-      >
-        <ClipboardCheck size={16} />
-        Open Module Quiz
-      </Link>
-    </div>
+    <div
+      className="md-prose text-sm"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
 
@@ -417,14 +413,14 @@ function VideoQuizTab({ video }: { video: YTCourseVideoMeta | undefined }) {
     return (
       <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
         <ClipboardCheck size={28} className="opacity-40" />
-        <p className="text-sm">Quiz not generated yet.</p>
+        <p className="text-sm">Quiz not generated yet for this video.</p>
       </div>
     );
   }
   return (
     <div className="flex flex-col items-center justify-center h-40 gap-3">
       <ClipboardCheck size={32} className="text-indigo-400" />
-      <p className="text-sm text-gray-300">Ready to test your video knowledge?</p>
+      <p className="text-sm text-gray-300">Ready to test your knowledge of this video?</p>
       <Link
         to={`/app/assessments?quizId=${video.quizId}`}
         className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
@@ -436,27 +432,11 @@ function VideoQuizTab({ video }: { video: YTCourseVideoMeta | undefined }) {
   );
 }
 
-function TranscriptTab({ video }: { video: YTCourseVideoMeta | undefined }) {
-  if (!video?.transcript) {
-    return (
-      <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
-        <FileText size={28} className="opacity-40" />
-        <p className="text-sm">Transcript not available for this video.</p>
-      </div>
-    );
-  }
-  return (
-    <pre className="whitespace-pre-wrap text-sm text-gray-200 font-sans leading-relaxed p-1">
-      {video.transcript}
-    </pre>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
-type TabId = "notes" | "module-quiz" | "video-quiz" | "transcript";
+type TabId = "notes" | "video-quiz";
 
 export default function CoursePlayerPage() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -605,10 +585,8 @@ export default function CoursePlayerPage() {
 
   // ---- Render ---------------------------------------------------------------
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: "notes", label: "Notes", icon: <BookOpen size={14} /> },
-    { id: "module-quiz", label: "Module Quiz", icon: <ClipboardCheck size={14} /> },
+    { id: "notes", label: "Module Notes", icon: <BookOpen size={14} /> },
     { id: "video-quiz", label: "Video Quiz", icon: <ClipboardCheck size={14} /> },
-    { id: "transcript", label: "Transcript", icon: <FileText size={14} /> },
   ];
 
   return (
@@ -747,7 +725,7 @@ export default function CoursePlayerPage() {
             <div className="w-full">
               <iframe
                 key={activeVideoId}
-                src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1`}
+                src={`https://www.youtube.com/embed/${activeVideoId}`}
                 title={activeVideo?.title ?? "Video"}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
@@ -793,11 +771,7 @@ export default function CoursePlayerPage() {
                     pages={appData.pages}
                   />
                 )}
-                {activeTab === "module-quiz" && (
-                  <ModuleQuizTab mod={activeModule ?? course.modules[0]} />
-                )}
                 {activeTab === "video-quiz" && <VideoQuizTab video={activeVideo} />}
-                {activeTab === "transcript" && <TranscriptTab video={activeVideo} />}
               </div>
             </div>
           </>

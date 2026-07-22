@@ -203,21 +203,47 @@ export async function chatStream(
 /** Best-effort extraction of a JSON value from an LLM reply (handles code fences/prose). */
 export function extractJson<T>(text: string): T {
   let t = text.trim();
+  // Strip markdown code fences
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1].trim();
+
+  // Find where the JSON starts
   const firstObj = t.indexOf("{");
   const firstArr = t.indexOf("[");
   let start = -1;
+  let open = "{";
   let close = "}";
   if (firstArr !== -1 && (firstObj === -1 || firstArr < firstObj)) {
     start = firstArr;
+    open = "[";
     close = "]";
   } else if (firstObj !== -1) {
     start = firstObj;
+    open = "{";
     close = "}";
   }
   if (start === -1) throw new AiError("AI did not return JSON.");
-  const end = t.lastIndexOf(close);
+
+  // Bracket-count to find the matching close — handles nested structures and
+  // quoted strings (so braces inside "..." don't affect depth).
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let end = -1;
+  for (let i = start; i < t.length; i++) {
+    const ch = t[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\") { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) throw new AiError("AI did not return JSON.");
+
   try {
     return JSON.parse(t.slice(start, end + 1)) as T;
   } catch {
