@@ -292,9 +292,9 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const finalBufRef = useRef("");
   const interimBufRef = useRef("");
-  // Deduplication: track last text sent to AI so Chrome's post-restart replay
-  // of the same final results doesn't produce duplicate transcript entries.
   const lastEnqueuedRef = useRef("");
+  const lastHeardRef = useRef<number | null>(null);   // mirrors lastHeard state for closures
+  const retryCountRef = useRef(0);                   // consecutive error retries
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boundaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const periodicTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -418,19 +418,20 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
     listeningRef.current = true;
     finalBufRef.current = "";
     interimBufRef.current = "";
+    lastHeardRef.current = null;
+    retryCountRef.current = 0;
     setListening(true);
     setError(null);
     setLastHeard(null);
 
-    // Periodic safety flush every 8 s: if Chrome has been silent (no onresult)
-    // but we have interim text, commit it. Handles the case where Chrome stops
-    // firing events mid-session without calling onend.
+    // Periodic safety flush every 8 s: if Chrome has stopped firing onresult
+    // without calling onend (a known Chrome hang), commit whatever we have.
+    // Uses lastHeardRef (not state) so the closure always reads the latest value.
     periodicTimerRef.current = setInterval(() => {
       const hasContent = finalBufRef.current.trim() || interimBufRef.current.trim();
       if (hasContent) {
-        // Only flush if we haven't heard anything new in 4+ seconds
-        const age = lastHeard ? Date.now() - lastHeard : Infinity;
-        if (age > 4000) enqueue(true);
+        const age = lastHeardRef.current ? Date.now() - lastHeardRef.current : Infinity;
+        if (age > 5000) enqueue(true);
       }
     }, 8000);
 
@@ -442,8 +443,11 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
       rec.lang = "en-US";
 
       rec.onresult = (event: SpeechRecognitionEvent) => {
-        setLastHeard(Date.now());
-        setRestarting(false);   // we have audio — restart gap is over
+        const now = Date.now();
+        setLastHeard(now);
+        lastHeardRef.current = now;
+        retryCountRef.current = 0;     // successful audio — reset error retry counter
+        setRestarting(false);
         setAudioLevel(Math.floor(Math.random() * 3) + 1);
         setTimeout(() => setAudioLevel(0), 400);
 
@@ -484,11 +488,36 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
       };
 
       rec.onerror = (e) => {
-        const evErr = (e as unknown as { error?: string }).error;
-        if (evErr === "no-speech" || evErr === "aborted") return; // harmless, onend restarts
-        setError("Mic error — check permissions and try again.");
-        listeningRef.current = false;
-        setListening(false);
+        const evErr = (e as unknown as { error?: string }).error ?? "";
+
+        // Harmless — Chrome fired onend immediately after; restart is handled there
+        if (evErr === "no-speech" || evErr === "aborted") return;
+
+        // Truly fatal — user must act (revoke/grant permission)
+        if (evErr === "audio-capture" || evErr === "not-allowed") {
+          setError("Microphone not accessible — check browser permissions.");
+          listeningRef.current = false;
+          setListening(false);
+          setRestarting(false);
+          return;
+        }
+
+        // Retryable: "network" (Google's servers rate-limit after a few sessions),
+        // "service-not-allowed", or any unknown Chrome error.
+        // Use exponential back-off up to 5 attempts (1s, 2s, 3s, 4s, 5s).
+        retryCountRef.current++;
+        if (retryCountRef.current <= 5 && listeningRef.current) {
+          const delay = Math.min(1000 * retryCountRef.current, 5000);
+          setRestarting(true);
+          setTimeout(() => {
+            if (listeningRef.current) createAndStart();
+          }, delay);
+        } else {
+          setError(`Recognition stopped (${evErr || "unknown error"}). Press Stop then Start to retry.`);
+          listeningRef.current = false;
+          setListening(false);
+          setRestarting(false);
+        }
       };
 
       // onend fires every ~60s as Chrome ends its session (normal behaviour).
