@@ -8,6 +8,11 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCw,
+  Pencil,
+  Check,
+  X,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { flashcards as store, useAppData } from "@/lib/store";
 import { generateFlashcardsFromText } from "@/lib/aiActions";
@@ -19,6 +24,8 @@ export default function FlashcardsPage() {
   const [count, setCount] = useState(10);
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
 
   // Review mode
   const [reviewDeck, setReviewDeck] = useState<Flashcard[] | null>(null);
@@ -58,6 +65,22 @@ export default function FlashcardsPage() {
       standalone.push(f);
     }
   }
+
+  // Build sorted deck list with metadata
+  type DeckEntry = { id: string; label: string; cards: Flashcard[]; order: number };
+  const deckEntries: DeckEntry[] = [
+    ...Object.entries(byPage).map(([pid, cards]) => {
+      const meta = data.flashcardDecks.find((d) => d.id === pid);
+      const node = data.nodes.find((n) => n.id === pid);
+      return { id: pid, label: meta?.name ?? node?.title ?? "Unknown page", cards, order: meta?.order ?? 9999 };
+    }),
+    ...(standalone.length > 0 ? [{
+      id: "standalone",
+      label: data.flashcardDecks.find((d) => d.id === "standalone")?.name ?? "Standalone cards",
+      cards: standalone,
+      order: data.flashcardDecks.find((d) => d.id === "standalone")?.order ?? 9999,
+    }] : []),
+  ].sort((a, b) => a.order - b.order);
 
   // Review screen
   if (reviewDeck) {
@@ -171,56 +194,68 @@ export default function FlashcardsPage() {
       </div>
 
       {/* Decks */}
-      {data.flashcards.length > 0 && (
+      {deckEntries.length > 0 && (
         <>
           <h2 className="mt-8 font-semibold text-white">Your flashcards ({data.flashcards.length})</h2>
-          <div className="mt-3 space-y-3">
-            {/* By page */}
-            {Object.entries(byPage).map(([pid, cards]) => {
-              const node = data.nodes.find((n) => n.id === pid);
-              return (
-                <div key={pid} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-white">{node?.title ?? "Unknown page"}</p>
-                    <p className="text-xs text-slate-500">{cards.length} cards</p>
-                  </div>
-                  <button
-                    onClick={() => { setReviewDeck(cards); setCardIndex(0); setFlipped(false); }}
-                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500"
-                  >
-                    Review
+          <div className="mt-3 space-y-2">
+            {deckEntries.map((entry, idx) => (
+              <div key={entry.id} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                {/* Move up/down */}
+                <div className="flex flex-col gap-0.5 shrink-0">
+                  <button onClick={() => store.moveDeck(entry.id, "up")} disabled={idx === 0}
+                    className="rounded p-0.5 text-slate-600 hover:text-slate-300 disabled:opacity-20">
+                    <ArrowUp className="h-3 w-3" />
                   </button>
-                  <button
-                    onClick={() => cards.forEach((c) => store.remove(c.id))}
-                    className="rounded p-1.5 text-slate-400 hover:text-rose-400"
-                    title="Delete deck"
-                  >
-                    <Trash2 className="h-4 w-4" />
+                  <button onClick={() => store.moveDeck(entry.id, "down")} disabled={idx === deckEntries.length - 1}
+                    className="rounded p-0.5 text-slate-600 hover:text-slate-300 disabled:opacity-20">
+                    <ArrowDown className="h-3 w-3" />
                   </button>
                 </div>
-              );
-            })}
-            {/* Standalone */}
-            {standalone.length > 0 && (
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-white">Standalone cards</p>
-                  <p className="text-xs text-slate-500">{standalone.length} cards</p>
+                  {renamingId === entry.id ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        value={renameDraft}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && renameDraft.trim()) { store.renameDeck(entry.id, renameDraft.trim()); setRenamingId(null); }
+                          if (e.key === "Escape") setRenamingId(null);
+                        }}
+                        className="flex-1 rounded border border-white/20 bg-slate-800 px-2 py-0.5 text-sm text-white outline-none focus:border-brand-500"
+                      />
+                      <button onClick={() => { if (renameDraft.trim()) { store.renameDeck(entry.id, renameDraft.trim()); } setRenamingId(null); }}
+                        className="text-brand-400 hover:text-brand-300"><Check className="h-4 w-4" /></button>
+                      <button onClick={() => setRenamingId(null)} className="text-slate-500 hover:text-white"><X className="h-4 w-4" /></button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate font-medium text-white">{entry.label}</p>
+                      <button onClick={() => { setRenamingId(entry.id); setRenameDraft(entry.label); }}
+                        className="shrink-0 text-slate-600 hover:text-slate-300">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-500 mt-0.5">{entry.cards.length} cards</p>
                 </div>
+
                 <button
-                  onClick={() => { setReviewDeck(standalone); setCardIndex(0); setFlipped(false); }}
-                  className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500"
+                  onClick={() => { setReviewDeck(entry.cards); setCardIndex(0); setFlipped(false); }}
+                  className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 shrink-0"
                 >
                   Review
                 </button>
                 <button
-                  onClick={() => standalone.forEach((c) => store.remove(c.id))}
-                  className="rounded p-1.5 text-slate-400 hover:text-rose-400"
+                  onClick={() => entry.cards.forEach((c) => store.remove(c.id))}
+                  className="rounded p-1.5 text-slate-400 hover:text-rose-400 shrink-0"
+                  title="Delete deck"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-            )}
+            ))}
           </div>
         </>
       )}

@@ -131,6 +131,16 @@ export interface Flashcard {
   createdAt: number;
 }
 
+/** Metadata for a flashcard deck (name override + sort order). Key is pageId or "standalone". */
+export interface FlashcardDeckMeta {
+  /** pageId or "standalone" */
+  id: string;
+  /** Custom name; falls back to tree node title if absent */
+  name?: string;
+  /** Lower = shown first */
+  order: number;
+}
+
 export type HighlightColor = "yellow" | "green" | "blue" | "pink";
 
 export interface Highlight {
@@ -190,6 +200,8 @@ export interface AppData {
   questionBanks: QuestionBank[];
   /** Flashcard decks. */
   flashcards: Flashcard[];
+  /** Deck metadata (custom names + sort order). */
+  flashcardDecks: FlashcardDeckMeta[];
   /** Text highlights on learning pages. */
   highlights: Highlight[];
   /** YouTube video recommendations. */

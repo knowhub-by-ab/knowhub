@@ -42,6 +42,7 @@ const DEFAULT_DATA: AppData = {
   chatSessions: [],
   questionBanks: [],
   flashcards: [],
+  flashcardDecks: [],
   highlights: [],
   videos: [],
   chatFolders: [],
@@ -90,6 +91,7 @@ function load(): AppData {
       chatSessions: parsed.chatSessions ?? [],
       questionBanks: parsed.questionBanks ?? [],
       flashcards: parsed.flashcards ?? [],
+      flashcardDecks: parsed.flashcardDecks ?? [],
       highlights: parsed.highlights ?? [],
       videos: parsed.videos ?? [],
       chatFolders: parsed.chatFolders ?? [],
@@ -193,11 +195,14 @@ function merged(next: Partial<AppData>): AppData {
     chatSessions: next.chatSessions ?? [],
     questionBanks: next.questionBanks ?? [],
     flashcards: next.flashcards ?? [],
+    flashcardDecks: next.flashcardDecks ?? [],
     highlights: next.highlights ?? [],
     videos: next.videos ?? [],
     chatFolders: next.chatFolders ?? [],
     // Preserve local-only fields — puterApiToken is never in remote exports
     puterApiToken: next.puterApiToken ?? state?.puterApiToken,
+    clonedVoiceId: next.clonedVoiceId,
+    clonedVoiceProvider: next.clonedVoiceProvider,
   };
 }
 
@@ -551,6 +556,33 @@ export const flashcards = {
   },
   remove(id: string) {
     setState((prev) => ({ ...prev, flashcards: prev.flashcards.filter((f) => f.id !== id) }));
+  },
+  renameDeck(deckId: string, name: string) {
+    setState((prev) => {
+      const existing = prev.flashcardDecks.find((d) => d.id === deckId);
+      if (existing) {
+        return { ...prev, flashcardDecks: prev.flashcardDecks.map((d) => d.id === deckId ? { ...d, name } : d) };
+      }
+      const maxOrder = prev.flashcardDecks.reduce((m, d) => Math.max(m, d.order), -1);
+      return { ...prev, flashcardDecks: [...prev.flashcardDecks, { id: deckId, name, order: maxOrder + 1 }] };
+    });
+  },
+  moveDeck(deckId: string, direction: "up" | "down") {
+    setState((prev) => {
+      // Ensure all decks have meta entries
+      const allIds = Array.from(new Set([
+        ...prev.flashcards.map((f) => f.pageId ?? "standalone"),
+        ...prev.flashcardDecks.map((d) => d.id),
+      ]));
+      const metas = allIds.map((id, i) => prev.flashcardDecks.find((d) => d.id === id) ?? { id, order: i });
+      metas.sort((a, b) => a.order - b.order);
+      const idx = metas.findIndex((d) => d.id === deckId);
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= metas.length) return prev;
+      const [a, b] = [metas[idx], metas[swapIdx]];
+      [a.order, b.order] = [b.order, a.order];
+      return { ...prev, flashcardDecks: metas };
+    });
   },
 };
 
