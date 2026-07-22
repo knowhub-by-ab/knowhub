@@ -21,6 +21,7 @@ import type {
   Highlight,
   VideoRec,
   VideoPlaylist,
+  ContentCollection,
   ResourceCollection,
 } from "./types";
 
@@ -49,6 +50,7 @@ const DEFAULT_DATA: AppData = {
   highlights: [],
   videos: [],
   videoPlaylists: [],
+  contentCollections: [],
   chatFolders: [],
   puterApiToken: undefined,
 };
@@ -100,6 +102,7 @@ function load(): AppData {
       highlights: parsed.highlights ?? [],
       videos: parsed.videos ?? [],
       videoPlaylists: parsed.videoPlaylists ?? [],
+      contentCollections: parsed.contentCollections ?? [],
       chatFolders: parsed.chatFolders ?? [],
     };
   } catch {
@@ -206,6 +209,7 @@ function merged(next: Partial<AppData>): AppData {
     highlights: next.highlights ?? [],
     videos: next.videos ?? [],
     videoPlaylists: next.videoPlaylists ?? [],
+    contentCollections: next.contentCollections ?? [],
     chatFolders: next.chatFolders ?? [],
     // Preserve local-only fields — puterApiToken is never in remote exports
     puterApiToken: next.puterApiToken ?? state?.puterApiToken,
@@ -283,16 +287,23 @@ export const tree = {
     setState((prev) => {
       const siblings = prev.nodes.filter((n) => n.parentId === parentId);
       node.order = siblings.length;
-      return { ...prev, nodes: [...prev.nodes, node] };
+      const col: ContentCollection = { id: node.id, name: node.title, nodeId: node.id, createdAt: node.createdAt };
+      return {
+        ...prev,
+        nodes: [...prev.nodes, node],
+        contentCollections: [...prev.contentCollections, col],
+      };
     });
     return node;
   },
 
   rename(id: string, title: string) {
+    const resolved = title.trim() || "Untitled";
     setState((prev) => ({
       ...prev,
-      nodes: prev.nodes.map((n) =>
-        n.id === id ? { ...n, title: title.trim() || "Untitled" } : n
+      nodes: prev.nodes.map((n) => n.id === id ? { ...n, title: resolved } : n),
+      contentCollections: prev.contentCollections.map((c) =>
+        c.nodeId === id ? { ...c, name: resolved } : c
       ),
     }));
   },
@@ -324,6 +335,7 @@ export const tree = {
         ...prev,
         nodes: prev.nodes.filter((n) => !toRemove.has(n.id)),
         pages,
+        contentCollections: prev.contentCollections.filter((c) => !toRemove.has(c.nodeId)),
       };
     });
   },
@@ -490,6 +502,25 @@ export const resourceCollections = {
       [a.order, b.order] = [b.order, a.order];
       return { ...prev, resourceCollections: sorted };
     });
+  },
+};
+
+// --- Content Collections (cross-type, auto-created with tree nodes) ----------
+
+export const contentCollections = {
+  /** Rename a collection independently (separate from node rename). */
+  rename(id: string, name: string) {
+    setState((prev) => ({
+      ...prev,
+      contentCollections: prev.contentCollections.map((c) => c.id === id ? { ...c, name } : c),
+    }));
+  },
+  /** Get collection for a node (same id). */
+  forNode(nodeId: string): ContentCollection | undefined {
+    return state.contentCollections.find((c) => c.nodeId === nodeId);
+  },
+  getAll(): ContentCollection[] {
+    return state.contentCollections;
   },
 };
 

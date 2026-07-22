@@ -222,6 +222,8 @@ export interface AppData {
   videos: VideoRec[];
   /** Video playlists (ordered groupings of VideoRecs). */
   videoPlaylists: VideoPlaylist[];
+  /** Cross-content-type collections, one auto-created per tree node. */
+  contentCollections: ContentCollection[];
   /** Chat session folders. */
   chatFolders: ChatFolder[];
   /** Puter API token for TTS/MP3 download (stored locally only, never synced). */
@@ -230,6 +232,19 @@ export interface AppData {
   clonedVoiceId?: string;
   /** Provider that produced the global cloned voice. */
   clonedVoiceProvider?: "elevenlabs" | "fishaudio" | "resembleai";
+}
+
+/**
+ * A cross-content-type collection that mirrors a tree node.
+ * Auto-created when a TreeNode is added; links videos, resources,
+ * flashcards, and presentations to that topic.
+ */
+export interface ContentCollection {
+  id: string;
+  name: string;
+  /** The tree node this collection mirrors (same id). */
+  nodeId: string;
+  createdAt: number;
 }
 
 export interface VideoPlaylist {

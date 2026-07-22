@@ -20,6 +20,9 @@ import {
   MessagesSquare,
   PanelLeftOpen,
   Youtube,
+  Layers,
+  BookOpen,
+  ListVideo,
 } from "lucide-react";
 import { setPage, tree, highlights as highlightStore, useAppData } from "@/lib/store";
 import { selectionToHighlight, applyHighlights, HIGHLIGHT_CLASSES, type HighlightColor } from "@/lib/highlights";
@@ -785,12 +788,60 @@ export default function LearningPagesPage() {
               </div>
             )}
           </section>
+
+          {/* Related Content panel */}
+          {selectedId && <RelatedContent nodeId={selectedId} data={data} />}
         </div>
         </>
       )}
       <p className="mt-3 text-xs text-slate-500">
         Pages save automatically in your browser and sync to your account. Green dot = page has content.
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Related Content — shows all content linked to a node via ContentCollection
+// ---------------------------------------------------------------------------
+import type { AppData } from "@/lib/types";
+
+function RelatedContent({ nodeId, data }: { nodeId: string; data: AppData }) {
+  const flashcardDeck = data.flashcards.filter((f) => f.pageId === nodeId);
+  const videos = data.videos.filter((v) => v.kept && v.pageId === nodeId);
+  const resources = data.resources.filter((r) => r.collectionId === nodeId);
+
+  if (flashcardDeck.length === 0 && videos.length === 0 && resources.length === 0) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Related content for this topic</p>
+      <div className="flex flex-wrap gap-4">
+        {flashcardDeck.length > 0 && (
+          <Link to="/app/flashcards" className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300 hover:text-brand-300 hover:border-brand-500/30 transition-colors">
+            <Layers className="h-4 w-4 text-brand-400" />
+            {flashcardDeck.length} flashcard{flashcardDeck.length !== 1 ? "s" : ""}
+          </Link>
+        )}
+        {videos.length > 0 && (
+          <Link to={`/app/videos?pageId=${nodeId}`} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300 hover:text-red-300 hover:border-red-500/30 transition-colors">
+            <Youtube className="h-4 w-4 text-red-400" />
+            {videos.length} video{videos.length !== 1 ? "s" : ""}
+          </Link>
+        )}
+        {resources.length > 0 && (
+          <Link to="/app/resources" className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300 hover:text-emerald-300 hover:border-emerald-500/30 transition-colors">
+            <BookOpen className="h-4 w-4 text-emerald-400" />
+            {resources.length} resource{resources.length !== 1 ? "s" : ""}
+          </Link>
+        )}
+        {data.videoPlaylists.filter((p) => p.nodeId === nodeId).map((pl) => (
+          <Link key={pl.id} to="/app/videos" className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300 hover:text-brand-300 hover:border-brand-500/30 transition-colors">
+            <ListVideo className="h-4 w-4 text-brand-400" />
+            {pl.name} ({pl.videoIds.length})
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
