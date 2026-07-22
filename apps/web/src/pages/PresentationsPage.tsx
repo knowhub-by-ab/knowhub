@@ -6,13 +6,14 @@ import {
 } from "lucide-react";
 
 const MdGuidePage = lazy(() => import("@/pages/MdGuidePage"));
+const MdEditorTab = lazy(() => import("@/components/deck/MdEditorTab"));
 import { useDeckStore, decks as deckOps, collections as colOps } from "@/lib/deckStore";
 import type { PresentationDeck, Collection, CollectionType } from "@/lib/deckStore";
 import { useAppData } from "@/lib/store";
 import { exportPptx, THEMES } from "@/lib/deckExport";
 import NewDeckModal from "@/components/deck/NewDeckModal";
 
-type Tab = "decks" | "collections" | "guide";
+type Tab = "decks" | "collections" | "guide" | "md-editor";
 type SortKey = "newest" | "oldest" | "title";
 
 export default function PresentationsPage() {
@@ -123,6 +124,12 @@ export default function PresentationsPage() {
         >
           MD Guide
         </button>
+        <button
+          onClick={() => setTab("md-editor")}
+          className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${tab === "md-editor" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+        >
+          MD Editor
+        </button>
       </div>
 
       {/* Controls */}
@@ -164,6 +171,14 @@ export default function PresentationsPage() {
           <div className="flex-1 overflow-y-auto">
             <Suspense fallback={<div className="p-8 text-zinc-500 text-sm">Loading guide…</div>}>
               <MdGuidePage />
+            </Suspense>
+          </div>
+        )}
+
+        {tab === "md-editor" && (
+          <div className="h-full">
+            <Suspense fallback={<div className="p-8 text-zinc-500 text-sm">Loading editor…</div>}>
+              <MdEditorTab />
             </Suspense>
           </div>
         )}
