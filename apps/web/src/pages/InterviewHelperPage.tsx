@@ -251,37 +251,64 @@ function ContextTab({
 
 // ─── Live Mode ────────────────────────────────────────────────────────────
 
+// Detect natural sentence/question boundary in a final transcript segment.
+// Fires early trigger so user gets answer even mid-monologue.
+function hasBoundary(text: string): boolean {
+  const t = text.trim();
+  // Ends in question mark OR ends in period/exclamation after ≥5 words
+  if (/\?$/.test(t)) return true;
+  if (/[.!]$/.test(t) && t.split(/\s+/).length >= 5) return true;
+  return false;
+}
+
+// Detect question-opening phrases that suggest the interviewer is mid-question
+function hasQuestionPhrase(text: string): boolean {
+  return /\b(can you|could you|would you|tell me|describe|explain|what is|what are|how do|how would|why do|walk me through|give me an example)\b/i.test(text);
+}
+
+interface StreamingAnswer {
+  id: number;
+  question: string;
+  answer: string;          // streams in
+  done: boolean;
+  timestamp: number;
+}
+
 function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<typeof useAppData>["aiKeys"] }) {
   const srSupported = hasSpeechRecognition();
 
   const [listening, setListening] = useState(false);
   const [interimText, setInterimText] = useState("");
-  const [finalText, setFinalText] = useState(""); // accumulated since last AI call
-  const [qaHistory, setQaHistory] = useState<QAEntry[]>([]);
-  const [currentAnswer, setCurrentAnswer] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [pendingText, setPendingText] = useState("");    // accumulated final, not yet sent
+  const [answers, setAnswers] = useState<StreamingAnswer[]>([]);
+  const [queueLen, setQueueLen] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // Refs that closures can read without stale captures
+  const listeningRef = useRef(false);                   // FIX: closures read this, not state
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const pendingRef = useRef("");                         // mirrors pendingText state
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const finalTextRef = useRef(""); // keep ref in sync for closure access
-  const qaEndRef = useRef<HTMLDivElement>(null);
-  const answerRef = useRef<HTMLDivElement>(null);
+  const boundaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processingRef = useRef(false);
+  const queueRef = useRef<string[]>([]);
+  const answerIdRef = useRef(0);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const answerEndRef = useRef<HTMLDivElement>(null);
 
-  // Sync ref with state
-  useEffect(() => {
-    finalTextRef.current = finalText;
-  }, [finalText]);
+  // ── Queue processor ─────────────────────────────────────────────────────
+  const processQueue = useCallback(async () => {
+    if (processingRef.current || queueRef.current.length === 0) return;
+    processingRef.current = true;
 
-  const triggerAI = useCallback(
-    async (question: string) => {
-      if (!question.trim() || loading) return;
-      setFinalText("");
-      finalTextRef.current = "";
-      setInterimText("");
-      setLoading(true);
-      setError(null);
-      setCurrentAnswer("");
+    while (queueRef.current.length > 0) {
+      const question = queueRef.current.shift()!;
+      setQueueLen(queueRef.current.length);
+      const id = ++answerIdRef.current;
+      const ts = Date.now();
+
+      // Add streaming placeholder
+      setAnswers((prev) => [...prev, { id, question, answer: "", done: false, timestamp: ts }]);
 
       const systemPrompt = buildSystemPrompt(ctx);
       const messages: ChatMessage[] = [
@@ -289,116 +316,182 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
         { role: "user", content: question.trim() },
       ];
 
-      const ts = Date.now();
-      let answer = "";
-
       try {
-        answer = await chatStream(aiKeys, messages, (chunk) => {
-          setCurrentAnswer((prev) => prev + chunk);
-          answerRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        await chatStream(aiKeys, messages, (chunk) => {
+          setAnswers((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, answer: a.answer + chunk } : a))
+          );
+          answerEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "AI request failed.";
+        const msg = err instanceof Error ? err.message : "AI error";
+        setAnswers((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, answer: `[Error: ${msg}]`, done: true } : a))
+        );
         setError(msg);
-        setLoading(false);
-        return;
       }
 
-      setQaHistory((prev) => [
-        ...prev,
-        { question: question.trim(), answer, timestamp: ts },
-      ]);
-      setCurrentAnswer("");
-      setLoading(false);
-      setTimeout(() => {
-        qaEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 100);
-    },
-    [aiKeys, ctx, loading]
-  );
+      setAnswers((prev) => prev.map((a) => (a.id === id ? { ...a, done: true } : a)));
+      setTimeout(() => answerEndRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
+    }
 
-  const startSilenceTimer = useCallback(() => {
+    processingRef.current = false;
+    setQueueLen(0);
+  }, [aiKeys, ctx]);
+
+  // ── Enqueue a question for AI ───────────────────────────────────────────
+  const enqueue = useCallback((raw: string) => {
+    const q = raw.trim();
+    if (!q) return;
+    // Clear pending
+    pendingRef.current = "";
+    setPendingText("");
+    setInterimText("");
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (boundaryTimerRef.current) clearTimeout(boundaryTimerRef.current);
+
+    queueRef.current.push(q);
+    setQueueLen(queueRef.current.length);
+    processQueue();
+  }, [processQueue]);
+
+  // ── Silence timer — fires 1.5 s after last speech ──────────────────────
+  const resetSilenceTimer = useCallback(() => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = setTimeout(() => {
-      const q = finalTextRef.current;
-      if (q.trim()) {
-        triggerAI(q);
-      }
+      const q = pendingRef.current;
+      if (q.trim()) enqueue(q);
     }, 1500);
-  }, [triggerAI]);
+  }, [enqueue]);
 
+  // ── Boundary timer — fires 350 ms after detecting a sentence end ────────
+  const scheduleBoundaryTrigger = useCallback(() => {
+    if (boundaryTimerRef.current) clearTimeout(boundaryTimerRef.current);
+    boundaryTimerRef.current = setTimeout(() => {
+      const q = pendingRef.current;
+      if (q.trim()) enqueue(q);
+    }, 350);
+  }, [enqueue]);
+
+  // ── Manual trigger (Answer Now button + Space key) ──────────────────────
+  const triggerNow = useCallback(() => {
+    const q = pendingRef.current;
+    if (q.trim()) enqueue(q);
+  }, [enqueue]);
+
+  // Space key shortcut (only when not in a text input)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!listeningRef.current) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        triggerNow();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [triggerNow]);
+
+  // ── Start / stop recognition ────────────────────────────────────────────
   const startListening = useCallback(() => {
     if (!srSupported) return;
-    const rec = createRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = "en-US";
+    listeningRef.current = true;
+    setListening(true);
+    setError(null);
 
-    rec.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = "";
-      let newFinal = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const r = event.results[i];
-        if (r.isFinal) {
-          newFinal += r[0].transcript + " ";
-        } else {
-          interim += r[0].transcript;
+    function createAndStart() {
+      const rec = createRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = "en-US";
+
+      rec.onresult = (event: SpeechRecognitionEvent) => {
+        let interim = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const r = event.results[i];
+          if (r.isFinal) {
+            const seg = r[0].transcript;
+            pendingRef.current += seg + " ";
+            setPendingText(pendingRef.current);
+            transcriptEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+
+            // Trigger 1: sentence boundary in this segment
+            if (hasBoundary(seg) || hasQuestionPhrase(pendingRef.current)) {
+              scheduleBoundaryTrigger();
+            }
+
+            // Trigger 2: word-count overflow — send after ~45 words accumulate
+            const wordCount = pendingRef.current.trim().split(/\s+/).length;
+            if (wordCount >= 45) {
+              enqueue(pendingRef.current);
+              return;
+            }
+
+            // Trigger 3: silence (reset timer on every final segment)
+            resetSilenceTimer();
+          } else {
+            interim += r[0].transcript;
+          }
         }
-      }
-      if (newFinal) {
-        setFinalText((prev) => {
-          const updated = prev + newFinal;
-          finalTextRef.current = updated;
-          return updated;
-        });
-        startSilenceTimer();
-      }
-      setInterimText(interim);
-    };
+        setInterimText(interim);
+        if (interim) resetSilenceTimer();
+      };
 
-    rec.onerror = () => {
-      setError("Microphone error. Check permissions.");
-      setListening(false);
-    };
+      rec.onerror = (e) => {
+        // 'no-speech' is harmless — browser times out after silence; restart
+        const evErr = (e as unknown as { error?: string }).error;
+        if (evErr === "no-speech" || evErr === "aborted") {
+          // will auto-restart via onend
+          return;
+        }
+        setError("Microphone error — check permissions.");
+        listeningRef.current = false;
+        setListening(false);
+      };
 
-    rec.onend = () => {
-      // Auto-restart if still supposed to be listening
-      if (recognitionRef.current === rec && listening) {
-        try { rec.start(); } catch { /* ignore */ }
-      }
-    };
+      // KEY FIX: read listeningRef (mutable), not `listening` state (stale closure)
+      rec.onend = () => {
+        if (listeningRef.current) {
+          try { createAndStart(); } catch { /* ignore */ }
+        }
+      };
 
-    recognitionRef.current = rec;
-    try {
-      rec.start();
-      setListening(true);
-      setError(null);
-    } catch {
-      setError("Could not start microphone.");
+      recognitionRef.current = rec;
+      try { rec.start(); } catch { /* already started or permissions denied */ }
     }
-  }, [srSupported, listening, startSilenceTimer]);
+
+    createAndStart();
+  }, [srSupported, enqueue, resetSilenceTimer, scheduleBoundaryTrigger]);
 
   const stopListening = useCallback(() => {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
+    listeningRef.current = false;
     setListening(false);
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (boundaryTimerRef.current) clearTimeout(boundaryTimerRef.current);
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
     setInterimText("");
   }, []);
 
   const clearSession = useCallback(() => {
     stopListening();
-    setQaHistory([]);
-    setFinalText("");
-    setCurrentAnswer("");
+    setAnswers([]);
+    setPendingText("");
     setInterimText("");
+    pendingRef.current = "";
+    queueRef.current = [];
+    setQueueLen(0);
     setError(null);
+    processingRef.current = false;
   }, [stopListening]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
+      listeningRef.current = false;
       silenceTimerRef.current && clearTimeout(silenceTimerRef.current);
+      boundaryTimerRef.current && clearTimeout(boundaryTimerRef.current);
       recognitionRef.current?.abort();
     };
   }, []);
@@ -410,58 +503,59 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
         <div>
           <p className="font-semibold">Speech recognition not supported</p>
           <p className="text-sm mt-1">
-            Use Chrome or Edge for Live mode. Practice mode still works in all
-            browsers.
+            Use Chrome or Edge for Live mode. Practice mode still works in all browsers.
           </p>
         </div>
       </div>
     );
   }
 
+  const hasAnswering = answers.some((a) => !a.done);
+
   return (
     <div className="flex flex-col gap-4 h-full">
-      {/* Status + controls */}
+      {/* Controls bar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <span
-          className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
-            listening
-              ? "bg-red-900/60 text-red-300 border border-red-700"
-              : "bg-gray-700 text-gray-400 border border-gray-600"
-          }`}
-        >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              listening ? "bg-red-400 animate-pulse" : "bg-gray-500"
-            }`}
-          />
+        {/* Status badge */}
+        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
+          listening ? "bg-red-900/60 text-red-300 border-red-700" : "bg-gray-700 text-gray-400 border-gray-600"
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${listening ? "bg-red-400 animate-pulse" : "bg-gray-500"}`} />
           {listening ? "Listening…" : "Idle"}
         </span>
 
         <button
           onClick={listening ? stopListening : startListening}
-          disabled={loading}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            listening
-              ? "bg-red-600 hover:bg-red-700 text-white"
-              : "bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+            listening ? "bg-red-600 hover:bg-red-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white"
           }`}
         >
-          {listening ? (
-            <>
-              <Square className="w-4 h-4" /> Stop
-            </>
-          ) : (
-            <>
-              <Mic className="w-4 h-4" /> Start Listening
-            </>
-          )}
+          {listening ? <><Square className="w-4 h-4" /> Stop</> : <><Mic className="w-4 h-4" /> Start Listening</>}
         </button>
+
+        {/* Answer Now — manual trigger */}
+        {listening && pendingText.trim() && (
+          <button
+            onClick={triggerNow}
+            className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            title="Force AI response now (Space)"
+          >
+            <Loader2 className="w-4 h-4" /> Answer Now
+            <kbd className="ml-1 text-[10px] bg-green-900/60 px-1.5 py-0.5 rounded">Space</kbd>
+          </button>
+        )}
+
+        {queueLen > 0 && (
+          <span className="text-xs text-yellow-400 bg-yellow-900/40 border border-yellow-700/50 px-2 py-1 rounded-full">
+            {queueLen} queued
+          </span>
+        )}
 
         <button
           onClick={clearSession}
           className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          <RotateCcw className="w-4 h-4" /> Clear Session
+          <RotateCcw className="w-4 h-4" /> Clear
         </button>
 
         {error && (
@@ -471,76 +565,65 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
         )}
       </div>
 
+      {/* Trigger hint */}
+      {listening && (
+        <p className="text-[11px] text-gray-500">
+          AI auto-responds on: silence (1.5 s) · question mark detected · 45+ words · or press <kbd className="bg-gray-700 px-1.5 py-0.5 rounded text-gray-300">Space</kbd>
+        </p>
+      )}
+
       {/* Split view */}
-      <div className="flex gap-4 flex-1 min-h-0" style={{ minHeight: "420px" }}>
-        {/* Transcript (40%) */}
-        <div className="w-2/5 flex flex-col bg-gray-850 border border-gray-700 rounded-xl overflow-hidden" style={{ background: "#141820" }}>
+      <div className="flex gap-4" style={{ minHeight: "460px" }}>
+        {/* Left — Transcript (40%) */}
+        <div className="w-2/5 flex flex-col border border-gray-700 rounded-xl overflow-hidden" style={{ background: "#141820" }}>
           <div className="px-4 py-2.5 border-b border-gray-700 text-xs font-semibold text-gray-400 uppercase tracking-wider">
             Transcript
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm">
-            {qaHistory.map((entry, i) => (
-              <div key={i} className="space-y-1">
-                <p className="text-gray-300 font-medium">Q: {entry.question}</p>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm" style={{ maxHeight: "420px" }}>
+            {/* Processed questions from history */}
+            {answers.map((a) => (
+              <div key={a.id} className="pb-2 border-b border-gray-700/40 last:border-0">
+                <span className="text-[10px] text-gray-600">{new Date(a.timestamp).toLocaleTimeString()}</span>
+                <p className="text-gray-300 mt-0.5">{a.question}</p>
               </div>
             ))}
-            {/* Current accumulation */}
-            {finalText && (
-              <p className="text-gray-300 font-medium">
-                {finalText}
-              </p>
+            {/* Currently accumulating */}
+            {pendingText && (
+              <p className="text-yellow-200/90 font-medium">{pendingText}</p>
             )}
             {interimText && (
               <p className="text-gray-500 italic">{interimText}</p>
             )}
-            {!finalText && !interimText && qaHistory.length === 0 && (
-              <p className="text-gray-600 text-xs">
-                Start listening — questions will appear here.
-              </p>
+            {!pendingText && !interimText && answers.length === 0 && (
+              <p className="text-gray-600 text-xs">Start listening — transcript appears here in real time.</p>
             )}
+            <div ref={transcriptEndRef} />
           </div>
         </div>
 
-        {/* AI Response (60%) */}
+        {/* Right — AI Answers (60%) */}
         <div className="w-3/5 flex flex-col bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-700 text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center justify-between">
             <span>AI Response</span>
-            {loading && (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
-            )}
+            {hasAnswering && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />}
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-6 text-sm">
-            {qaHistory.map((entry, i) => (
-              <div key={i} className="space-y-1 border-b border-gray-700/50 pb-4 last:border-0">
-                <p className="text-xs text-gray-500 font-medium mb-1.5">
-                  {new Date(entry.timestamp).toLocaleTimeString()}
-                </p>
-                <p className="text-gray-200 leading-relaxed whitespace-pre-wrap">
-                  {entry.answer}
-                </p>
-              </div>
-            ))}
-            {/* Streaming current answer */}
-            {(loading || currentAnswer) && (
-              <div className="space-y-1">
-                <p className="text-xs text-blue-400 font-medium mb-1.5">
-                  Answering…
-                </p>
-                <p className="text-gray-200 leading-relaxed whitespace-pre-wrap">
-                  {currentAnswer}
-                  {loading && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-5 text-sm" style={{ maxHeight: "420px" }}>
+            {answers.length === 0 && (
+              <p className="text-gray-600 text-xs">AI answers appear here as questions are detected.</p>
+            )}
+            {answers.map((a) => (
+              <div key={a.id} className="pb-4 border-b border-gray-700/40 last:border-0">
+                <p className="text-[10px] text-gray-500 mb-1">{new Date(a.timestamp).toLocaleTimeString()}</p>
+                <p className="text-[11px] text-gray-400 italic mb-2 line-clamp-2">↳ {a.question}</p>
+                <p className="text-gray-100 leading-relaxed whitespace-pre-wrap">
+                  {a.answer}
+                  {!a.done && (
                     <span className="inline-block w-1.5 h-4 bg-blue-400 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
                   )}
                 </p>
               </div>
-            )}
-            {!loading && !currentAnswer && qaHistory.length === 0 && (
-              <p className="text-gray-600 text-xs">
-                AI answers will appear here after each detected question.
-              </p>
-            )}
-            <div ref={qaEndRef} />
-            <div ref={answerRef} />
+            ))}
+            <div ref={answerEndRef} />
           </div>
         </div>
       </div>
