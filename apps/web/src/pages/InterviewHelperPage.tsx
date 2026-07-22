@@ -278,24 +278,23 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
   const srSupported = hasSpeechRecognition();
 
   const [listening, setListening] = useState(false);
-  const [interimDisplay, setInterimDisplay] = useState("");   // live interim shown in gray
-  const [pendingDisplay, setPendingDisplay] = useState("");   // committed final shown in yellow
+  const [restarting, setRestarting] = useState(false);       // true during onend→onresult gap
+  const [interimDisplay, setInterimDisplay] = useState("");
+  const [pendingDisplay, setPendingDisplay] = useState("");
   const [answers, setAnswers] = useState<StreamingAnswer[]>([]);
   const [queueLen, setQueueLen] = useState(0);
   const [lastHeard, setLastHeard] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [audioLevel, setAudioLevel] = useState(0);           // 0-3 "bars"
+  const [audioLevel, setAudioLevel] = useState(0);
 
-  // ── Mutable refs (closures always read fresh values) ────────────────────
+  // ── Mutable refs ─────────────────────────────────────────────────────────
   const listeningRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  // Separate buffers: finalBuf accumulates confirmed words; interimBuf is the
-  // current in-progress phrase Chrome hasn't committed yet.
-  // KEY INSIGHT: Chrome often keeps words in interim for many seconds before
-  // marking them final, or never marks them final if the session restarts.
-  // We use BOTH when triggering.
   const finalBufRef = useRef("");
   const interimBufRef = useRef("");
+  // Deduplication: track last text sent to AI so Chrome's post-restart replay
+  // of the same final results doesn't produce duplicate transcript entries.
+  const lastEnqueuedRef = useRef("");
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boundaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const periodicTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -307,14 +306,15 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
   const lastHeardTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [secsSinceHeard, setSecsSinceHeard] = useState<number | null>(null);
 
-  // Track seconds since last heard for "health" indicator
+  // Seconds-since-heard ticker — pauses during restart so red doesn't flash
   useEffect(() => {
     if (!listening) { setSecsSinceHeard(null); return; }
     lastHeardTimerRef.current = setInterval(() => {
+      if (restarting) return;   // don't increment during known restart gap
       setSecsSinceHeard(lastHeard ? Math.floor((Date.now() - lastHeard) / 1000) : null);
     }, 1000);
     return () => { lastHeardTimerRef.current && clearInterval(lastHeardTimerRef.current); };
-  }, [listening, lastHeard]);
+  }, [listening, lastHeard, restarting]);
 
   // ── Queue processor ─────────────────────────────────────────────────────
   const processQueue = useCallback(async () => {
@@ -353,23 +353,35 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
     setQueueLen(0);
   }, [aiKeys, ctx]);
 
-  // ── Enqueue — uses BOTH final and interim buffers ───────────────────────
-  // This is the critical fix: interim text is real speech that Chrome hasn't
-  // committed as "final" yet. Waiting for final means losing most of what's said.
+  // ── Enqueue — deduplicated, uses both final + interim buffers ────────────
   const enqueue = useCallback((includeInterim = true) => {
     const final = finalBufRef.current;
     const interim = includeInterim ? interimBufRef.current : "";
     const combined = (final + " " + interim).trim();
     if (!combined) return;
 
+    // Deduplication: Chrome re-sends the same final results after each ~60s
+    // restart. Strip any prefix that was already sent to avoid duplicate entries.
+    let deduped = combined;
+    if (lastEnqueuedRef.current) {
+      const prev = lastEnqueuedRef.current.trim();
+      // If combined STARTS WITH the previously sent text, take only the new tail
+      if (deduped.toLowerCase().startsWith(prev.toLowerCase())) {
+        deduped = deduped.slice(prev.length).trim();
+      }
+      // If combined IS the previously sent text (or very close), skip entirely
+      if (!deduped || deduped.split(/\s+/).length < 3) return;
+    }
+
     finalBufRef.current = "";
     interimBufRef.current = "";
+    lastEnqueuedRef.current = combined;   // remember full combined for next dedup
     setPendingDisplay("");
     setInterimDisplay("");
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (boundaryTimerRef.current) clearTimeout(boundaryTimerRef.current);
 
-    queueRef.current.push(combined);
+    queueRef.current.push(deduped);
     setQueueLen(queueRef.current.length);
     processQueue();
   }, [processQueue]);
@@ -431,7 +443,8 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
 
       rec.onresult = (event: SpeechRecognitionEvent) => {
         setLastHeard(Date.now());
-        setAudioLevel(Math.floor(Math.random() * 3) + 1); // visual pulse
+        setRestarting(false);   // we have audio — restart gap is over
+        setAudioLevel(Math.floor(Math.random() * 3) + 1);
         setTimeout(() => setAudioLevel(0), 400);
 
         let newInterim = "";
@@ -478,20 +491,23 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
         setListening(false);
       };
 
-      // onend: flush whatever interim we had (Chrome resets its buffer on restart)
-      // then immediately restart so there's no gap.
+      // onend fires every ~60s as Chrome ends its session (normal behaviour).
+      // We mark restarting=true so the health indicator shows "Restarting…"
+      // instead of "Last heard Xs ago" — the mic is fine, Chrome is just cycling.
       rec.onend = () => {
-        // Flush interim before restarting — it will be lost otherwise
+        if (!listeningRef.current) return;
+        // Move interim into final so it's not lost across the restart gap.
+        // Chrome will NOT re-send interim text in the next session (only finals
+        // get replayed), so we must preserve it manually.
         if (interimBufRef.current.trim()) {
           finalBufRef.current += interimBufRef.current + " ";
           interimBufRef.current = "";
           setPendingDisplay(finalBufRef.current);
           setInterimDisplay("");
         }
-        if (listeningRef.current) {
-          // Small delay avoids "already started" errors in some browsers
-          setTimeout(() => createAndStart(), 100);
-        }
+        setRestarting(true);
+        // Small delay avoids "already started" errors in some browsers
+        setTimeout(() => createAndStart(), 150);
       };
 
       recognitionRef.current = rec;
@@ -504,6 +520,7 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
   const stopListening = useCallback(() => {
     listeningRef.current = false;
     setListening(false);
+    setRestarting(false);
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     if (boundaryTimerRef.current) clearTimeout(boundaryTimerRef.current);
     if (periodicTimerRef.current) clearInterval(periodicTimerRef.current);
@@ -551,12 +568,14 @@ function LiveTab({ ctx, aiKeys }: { ctx: InterviewContext; aiKeys: ReturnType<ty
   const hasAnswering = answers.some((a) => !a.done);
   const hasPending = pendingDisplay.trim() || interimDisplay.trim();
 
-  // Health indicator colour
+  // Health indicator colour + label
   const healthColor = !listening ? "text-gray-500"
+    : restarting ? "text-yellow-400"
     : secsSinceHeard === null || secsSinceHeard < 3 ? "text-green-400"
     : secsSinceHeard < 8 ? "text-yellow-400"
     : "text-red-400";
   const healthLabel = !listening ? "Idle"
+    : restarting ? "Restarting…"       // Chrome's normal 60s session cycle
     : secsSinceHeard === null ? "Listening…"
     : secsSinceHeard < 3 ? "Hearing audio"
     : `Last heard ${secsSinceHeard}s ago`;
