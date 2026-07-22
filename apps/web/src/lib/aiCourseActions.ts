@@ -236,9 +236,9 @@ export async function checkForNewVideos(
 
   const data = (await res.json()) as {
     videos?: Array<{
-      youtubeId: string;
+      videoId: string;
       title: string;
-      channel: string;
+      channelTitle: string;
       thumbnailUrl: string;
       durationSec: number;
       description?: string;
@@ -246,7 +246,7 @@ export async function checkForNewVideos(
   };
 
   const newVideoItems = (data.videos ?? []).filter(
-    (v) => !course.videos[v.youtubeId]
+    (v) => v.videoId && !course.videos[v.videoId]
   );
 
   if (newVideoItems.length === 0) {
@@ -260,17 +260,17 @@ export async function checkForNewVideos(
     // Attempt to fetch transcript best-effort
     let transcript: string | undefined;
     try {
-      const tRes = await fetch(`/api/transcript?videoId=${encodeURIComponent(v.youtubeId)}`);
+      const tRes = await fetch(`/api/transcript?videoId=${encodeURIComponent(v.videoId)}`);
       if (tRes.ok) {
         const tData = (await tRes.json()) as { transcript?: string };
         transcript = tData.transcript;
       }
     } catch { /* transcript is optional */ }
 
-    updatedVideos[v.youtubeId] = {
-      youtubeId: v.youtubeId,
+    updatedVideos[v.videoId] = {
+      youtubeId: v.videoId,
       title: v.title,
-      channel: v.channel,
+      channel: v.channelTitle,
       thumbnailUrl: v.thumbnailUrl,
       durationSec: v.durationSec,
       description: v.description,
@@ -287,7 +287,7 @@ export async function checkForNewVideos(
     const unsortedModule: YTCourseModule = {
       id: courseUid(),
       title: "Unsorted",
-      videoIds: newVideoItems.map((v) => v.youtubeId),
+      videoIds: newVideoItems.map((v) => v.videoId),
       order: 0,
     };
     updatedModules = [unsortedModule];
@@ -295,7 +295,7 @@ export async function checkForNewVideos(
     const lastModule = currentModules[currentModules.length - 1];
     updatedModules = currentModules.map((m) =>
       m.id === lastModule.id
-        ? { ...m, videoIds: [...m.videoIds, ...newVideoItems.map((v) => v.youtubeId)] }
+        ? { ...m, videoIds: [...m.videoIds, ...newVideoItems.map((v) => v.videoId)] }
         : m
     );
   }
@@ -310,7 +310,7 @@ export async function checkForNewVideos(
   // Generate quizzes for new videos
   const freshCourse = courseOps.getById(courseId)!;
   for (const v of newVideoItems) {
-    const video = freshCourse.videos[v.youtubeId];
+    const video = freshCourse.videos[v.videoId];
     if (!video) continue;
 
     const contextText = videoSummary(video);

@@ -33,9 +33,9 @@ interface PlaylistPreview {
 }
 
 interface RawVideo {
-  youtubeId: string;
+  videoId: string;       // matches playlist.ts VideoItem.videoId
   title: string;
-  channel: string;
+  channelTitle: string;  // matches playlist.ts VideoItem.channelTitle
   thumbnailUrl: string;
   durationSec: number;
   description?: string;
@@ -292,17 +292,25 @@ function ImportModal({
       }
 
       const json = await res.json() as {
-        title?: string;
+        playlistTitle?: string;   // matches playlist.ts response field
         thumbnailUrl?: string;
         channelTitle?: string;
         videos?: RawVideo[];
+        totalCount?: number;
+        noApiKey?: boolean;
+        error?: string;
       };
+
+      if (json.noApiKey) {
+        throw new Error("YOUTUBE_API_KEY is not configured in Cloudflare environment variables.");
+      }
+      if (json.error) throw new Error(json.error);
 
       setPreview({
         playlistId,
-        title: json.title ?? "Untitled Playlist",
+        title: json.playlistTitle ?? "Untitled Playlist",
         thumbnailUrl: json.thumbnailUrl ?? "",
-        videoCount: json.videos?.length ?? 0,
+        videoCount: json.totalCount ?? json.videos?.length ?? 0,
         channelTitle: json.channelTitle ?? "",
         videos: json.videos ?? [],
       });
@@ -322,13 +330,14 @@ function ImportModal({
     const courseId = uid();
     const now = Date.now();
 
-    // Build initial videos record
+    // Build initial videos record — keys are YouTube video IDs
     const videos: Record<string, YTCourseVideoMeta> = {};
     for (const v of preview.videos) {
-      videos[v.youtubeId] = {
-        youtubeId: v.youtubeId,
+      if (!v.videoId) continue; // skip malformed entries
+      videos[v.videoId] = {
+        youtubeId: v.videoId,
         title: v.title,
-        channel: v.channel,
+        channel: v.channelTitle,
         thumbnailUrl: v.thumbnailUrl,
         durationSec: v.durationSec,
         description: v.description,
@@ -599,17 +608,17 @@ export default function CoursesPage() {
       const json = await res.json() as { videos?: RawVideo[] };
       const returnedVideos = json.videos ?? [];
       const existingIds = new Set(Object.keys(course.videos));
-      const newVideos = returnedVideos.filter((v) => !existingIds.has(v.youtubeId));
+      const newVideos = returnedVideos.filter((v) => v.videoId && !existingIds.has(v.videoId));
 
       if (newVideos.length === 0) {
         showToast("No new videos found.");
       } else {
         const updatedVideos = { ...course.videos };
         for (const v of newVideos) {
-          updatedVideos[v.youtubeId] = {
-            youtubeId: v.youtubeId,
+          updatedVideos[v.videoId] = {
+            youtubeId: v.videoId,
             title: v.title,
-            channel: v.channel,
+            channel: v.channelTitle,
             thumbnailUrl: v.thumbnailUrl,
             durationSec: v.durationSec,
             description: v.description,

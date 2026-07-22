@@ -156,6 +156,28 @@ export const courseOps = {
     );
   },
 
+  toggleVideoWatched(courseId: string, youtubeId: string): void {
+    setState((prev) =>
+      prev.map((c) => {
+        if (c.id !== courseId) return c;
+        const video = c.videos[youtubeId];
+        if (!video) return c;
+        return {
+          ...c,
+          updatedAt: Date.now(),
+          videos: {
+            ...c.videos,
+            [youtubeId]: {
+              ...video,
+              watched: !video.watched,
+              watchedAt: !video.watched ? Date.now() : undefined,
+            },
+          },
+        };
+      })
+    );
+  },
+
   setVideoQuiz(courseId: string, youtubeId: string, quizId: string): void {
     setState((prev) =>
       prev.map((c) => {

@@ -1,11 +1,13 @@
 // Cloudflare Pages Function — YouTube transcript fetcher.
 //
 // GET /api/transcript?videoId={videoId}
-//   → { transcript: string | null, reason?: string }
+//   → { transcript: string }               on success
+//   → { transcript: null, reason: string } on failure
 //
-// Fetches transcripts directly from YouTube's undocumented caption endpoint
-// without requiring an API key. Parses the XML caption track format and
-// returns clean plain text.
+// Three-tier approach:
+//   1. Direct timedtext API (fastest — works for auto-captions on most videos)
+//   2. Parse captionTracks from watch page HTML, then fetch chosen track URL
+//   3. Return null with reason
 
 interface Env {
   YOUTUBE_API_KEY?: string;
@@ -16,6 +18,9 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
+
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -67,7 +72,14 @@ function extractCaptionTracks(html: string): CaptionTrack[] {
   }
 
   try {
-    return JSON.parse(html.slice(start, end)) as CaptionTrack[];
+    // YouTube encodes special chars as & (&), = (=), \/ — unescape before parsing
+    const raw = html.slice(start, end)
+      .replace(/\\u0026/g, "&")
+      .replace(/\\u003d/g, "=")
+      .replace(/\\u003c/g, "<")
+      .replace(/\\u003e/g, ">")
+      .replace(/\\\//g, "/");
+    return JSON.parse(raw) as CaptionTrack[];
   } catch {
     return [];
   }
@@ -119,6 +131,29 @@ function parseXmlTranscript(xml: string): string {
   return segments.join(" ").replace(/\s{2,}/g, " ").trim();
 }
 
+// ---------------------------------------------------------------------------
+// Tier 1: direct undocumented timedtext API — no page load needed
+// ---------------------------------------------------------------------------
+
+async function tryDirectTimedtext(videoId: string): Promise<string | null> {
+  const variants = [
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&kind=asr&fmt=xml`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=xml`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en`,
+  ];
+  for (const u of variants) {
+    try {
+      const r = await fetch(u, { headers: { "User-Agent": BROWSER_UA } });
+      if (!r.ok) continue;
+      const xml = await r.text();
+      if (!xml.includes("<text")) continue;
+      const text = parseXmlTranscript(xml);
+      if (text.length > 50) return text;
+    } catch { /* try next */ }
+  }
+  return null;
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
   const url = new URL(request.url);
   const videoId = url.searchParams.get("videoId")?.trim();
@@ -132,15 +167,19 @@ export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
     return jsonResponse({ error: "Invalid videoId format." }, 400);
   }
 
+  // Tier 1: direct timedtext API (fastest path)
+  const direct = await tryDirectTimedtext(videoId);
+  if (direct) return jsonResponse({ transcript: direct });
+
   let pageHtml: string;
   try {
-    const ytRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    const ytRes = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en&gl=US`, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent": BROWSER_UA,
         "Accept-Language": "en-US,en;q=0.9",
         Accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Cookie: "CONSENT=YES+cb",
       },
     });
     if (!ytRes.ok) {
@@ -176,10 +215,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
   let captionXml: string;
   try {
     const capRes = await fetch(captionUrl.toString(), {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      },
+      headers: { "User-Agent": BROWSER_UA },
     });
     if (!capRes.ok) {
       return jsonResponse({ transcript: null, reason: "caption_fetch_failed" });

@@ -198,14 +198,21 @@ function VideoRow({
         )}
       </div>
 
-      {/* Watch indicator */}
-      <div className="flex-shrink-0 mt-1">
+      {/* Watch indicator — click to toggle watched/unwatched */}
+      <button
+        className="flex-shrink-0 mt-1 hover:scale-110 transition-transform"
+        title={video.watched ? "Mark as unwatched" : "Mark as watched"}
+        onClick={(e) => {
+          e.stopPropagation();
+          courseOps.toggleVideoWatched(courseId, video.youtubeId);
+        }}
+      >
         {video.watched ? (
           <CheckCircle2 size={14} className="text-green-400" />
         ) : (
-          <Circle size={14} className="text-gray-500" />
+          <Circle size={14} className="text-gray-500 group-hover:text-gray-300" />
         )}
-      </div>
+      </button>
 
       {/* Edit controls */}
       {editMode && (
@@ -471,7 +478,6 @@ export default function CoursePlayerPage() {
   const addModuleInputRef = useRef<HTMLInputElement>(null);
 
   // Watch timer
-  const watchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---- Initialise first video on mount / course change ---------------------
   useEffect(() => {
@@ -499,19 +505,9 @@ export default function CoursePlayerPage() {
     ? Object.values(course.videos).filter((v) => v.watched).length
     : 0;
 
-  // ---- Watch timer ----------------------------------------------------------
-  useEffect(() => {
-    if (watchTimerRef.current) clearTimeout(watchTimerRef.current);
-    if (!activeVideoId || !courseId) return;
-
-    watchTimerRef.current = setTimeout(() => {
-      courseOps.markVideoWatched(courseId, activeVideoId);
-    }, 30_000);
-
-    return () => {
-      if (watchTimerRef.current) clearTimeout(watchTimerRef.current);
-    };
-  }, [activeVideoId, courseId]);
+  // Auto-watch timer removed — marking videos watched automatically after 30s
+  // was too aggressive (marking a 19-min video done after 30s).
+  // User marks videos watched explicitly via the ✓ button in the sidebar.
 
   // ---- Handlers -------------------------------------------------------------
   const handleSelectVideo = useCallback(
