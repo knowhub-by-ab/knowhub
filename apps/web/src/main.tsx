@@ -62,3 +62,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 // page paints fast. Both are no-ops until Firebase is configured + signed in.
 void import("@/lib/auth").then((m) => m.completeRedirectSignIn());
 void import("@/lib/sync").then((m) => m.initSync());
+// Wire store changes → debounced GitHub auto-sync (10 s after last change)
+void import("@/lib/store").then(({ subscribeStore }) => {
+  import("@/lib/githubSync").then(({ scheduleAutoSync }) => {
+    subscribeStore(scheduleAutoSync);
+  });
+});

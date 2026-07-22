@@ -117,13 +117,17 @@ export interface KnowHubExport {
   pages: AppData["pages"];
   notesList: AppData["notesList"];
   resources: AppData["resources"];
+  resourceCollections: AppData["resourceCollections"];
   quizzes: AppData["quizzes"];
   flashcards: AppData["flashcards"];
+  flashcardDecks: AppData["flashcardDecks"];
   questionBanks: AppData["questionBanks"];
   chatSessions: AppData["chatSessions"];
   videos: AppData["videos"];
   highlights: AppData["highlights"];
   chatFolders: AppData["chatFolders"];
+  clonedVoiceId?: string;
+  clonedVoiceProvider?: AppData["clonedVoiceProvider"];
 }
 
 export function buildExport(data: AppData): KnowHubExport {
@@ -134,13 +138,17 @@ export function buildExport(data: AppData): KnowHubExport {
     pages: data.pages,
     notesList: data.notesList,
     resources: data.resources,
+    resourceCollections: data.resourceCollections ?? [],
     quizzes: data.quizzes,
     flashcards: data.flashcards,
+    flashcardDecks: data.flashcardDecks ?? [],
     questionBanks: data.questionBanks,
     chatSessions: data.chatSessions,
     videos: data.videos,
     highlights: data.highlights,
     chatFolders: data.chatFolders,
+    clonedVoiceId: data.clonedVoiceId,
+    clonedVoiceProvider: data.clonedVoiceProvider,
   };
 }
 

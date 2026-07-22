@@ -38,12 +38,16 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
       notesList: mergeById(local.notesList, remote.notesList),
       quizzes: mergeById(local.quizzes, remote.quizzes),
       resources: mergeById(local.resources, remote.resources),
+      resourceCollections: mergeById(local.resourceCollections ?? [], (remote as { resourceCollections?: typeof local.resourceCollections }).resourceCollections ?? []),
       flashcards: mergeById(local.flashcards, remote.flashcards),
+      flashcardDecks: mergeById(local.flashcardDecks ?? [], (remote as { flashcardDecks?: typeof local.flashcardDecks }).flashcardDecks ?? []),
       questionBanks: mergeById(local.questionBanks, remote.questionBanks),
       chatSessions: mergeById(local.chatSessions, remote.chatSessions),
       videos: mergeById(local.videos, remote.videos),
       highlights: mergeById(local.highlights, remote.highlights),
       chatFolders: mergeById(local.chatFolders ?? [], remote.chatFolders ?? []),
+      clonedVoiceId: local.clonedVoiceId ?? (remote as { clonedVoiceId?: string }).clonedVoiceId,
+      clonedVoiceProvider: local.clonedVoiceProvider ?? (remote as { clonedVoiceProvider?: typeof local.clonedVoiceProvider }).clonedVoiceProvider,
     });
     onProgress?.("Merge complete.");
   }
@@ -57,4 +61,28 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
 
   setGithub({ lastSync: Date.now() });
   return `${gh.login}/${repo}`;
+}
+
+// ---------------------------------------------------------------------------
+// Debounced auto-sync: fires 10 s after the last local data change
+// ---------------------------------------------------------------------------
+
+let _autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let _autoSyncing = false;
+
+export function scheduleAutoSync() {
+  const gh = getState().github ?? {};
+  if (!gh.token || !gh.login) return; // not connected — skip
+  if (_autoSyncTimer) clearTimeout(_autoSyncTimer);
+  _autoSyncTimer = setTimeout(async () => {
+    if (_autoSyncing) return; // previous run still in flight
+    _autoSyncing = true;
+    try {
+      await syncGithubNow();
+    } catch {
+      // Auto-sync failures are silent — user can trigger manually
+    } finally {
+      _autoSyncing = false;
+    }
+  }, 10_000);
 }
