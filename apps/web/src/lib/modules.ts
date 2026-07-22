@@ -18,6 +18,8 @@ import {
   Mic,
   Archive,
   Presentation,
+  GraduationCap,
+  HeadphonesIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -167,6 +169,22 @@ export const MODULES: ModuleDef[] = [
     icon: Presentation,
     summary: "Generate slide decks from Markdown, add narration, and export to PPTX or video.",
     prdRef: "Feature-PPT",
+  },
+  {
+    id: "courses",
+    label: "Courses",
+    path: "/app/courses",
+    icon: GraduationCap,
+    summary: "Import YouTube playlists and turn them into structured AI-generated courses.",
+    prdRef: "Feature-Courses",
+  },
+  {
+    id: "interview-helper",
+    label: "Interview Helper",
+    path: "/app/interview-helper",
+    icon: HeadphonesIcon,
+    summary: "Live mic listener + AI answers for job interviews. Practice mode included.",
+    prdRef: "Feature-Interview",
   },
   {
     id: "guide",

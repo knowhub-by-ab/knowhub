@@ -14,6 +14,7 @@ const ModulePlaceholderPage = lazy(() => import("@/pages/ModulePlaceholderPage")
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 const DeckEditorPage = lazy(() => import("@/pages/DeckEditorPage"));
 const PresenterViewPage = lazy(() => import("@/pages/PresenterViewPage"));
+const CoursePlayerPage = lazy(() => import("@/pages/CoursePlayerPage"));
 
 function Loading() {
   return (
@@ -47,6 +48,7 @@ const router = createBrowserRouter([
       }),
       { path: "presentations/:deckId", element: <S><DeckEditorPage /></S> },
       { path: "presentations/:deckId/present", element: <S><PresenterViewPage /></S> },
+      { path: "courses/:courseId", element: <S><CoursePlayerPage /></S> },
     ],
   },
   { path: "*", element: <NotFoundPage /> },
