@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Layers,
@@ -15,6 +15,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { flashcards as store, useAppData } from "@/lib/store";
+import CascadingNodePicker from "@/components/CascadingNodePicker";
 import { generateFlashcardsFromText } from "@/lib/aiActions";
 import type { Flashcard } from "@/lib/types";
 
@@ -33,6 +34,7 @@ export default function FlashcardsPage() {
   const [flipped, setFlipped] = useState(false);
 
   const pagesWithContent = data.nodes.filter((n) => data.pages[n.id]?.trim());
+  const pageIds = useMemo(() => new Set(pagesWithContent.map((n) => n.id)), [pagesWithContent]);
 
   async function generate() {
     if (genLoading) return;
@@ -151,16 +153,16 @@ export default function FlashcardsPage() {
       <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-3">
         <label className="text-xs font-medium text-slate-300">
           Generate from page
-          <select
-            value={selectedPageId}
-            onChange={(e) => setSelectedPageId(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
-          >
-            <option value="">Select a page…</option>
-            {pagesWithContent.map((n) => (
-              <option key={n.id} value={n.id}>{n.title}</option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <CascadingNodePicker
+              nodes={data.nodes}
+              value={selectedPageId}
+              onChange={setSelectedPageId}
+              placeholder="Select a page…"
+              pagesOnly
+              pageIds={pageIds}
+            />
+          </div>
         </label>
 
         <div className="flex items-center gap-3">
