@@ -105,9 +105,10 @@ export default function VideosPage() {
   }
 
   return (
-    <div className="flex h-full gap-0">
+    <div className="mx-auto max-w-5xl">
+    <div className="flex gap-5">
       {/* Sidebar — playlists */}
-      <aside className="w-52 shrink-0 border-r border-white/8 flex flex-col gap-1 py-3 px-2 overflow-y-auto">
+      <aside className="w-48 shrink-0 space-y-1">
         <p className="px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Playlists</p>
 
         {/* All Videos */}
@@ -189,9 +190,8 @@ export default function VideosPage() {
       </aside>
 
       {/* Main area */}
-      <div className="flex-1 overflow-y-auto px-6 py-0">
-        <div className="mx-auto max-w-3xl">
-          <div className="flex items-center gap-3 pt-4">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-3">
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-red-600/20 text-red-300">
               <Youtube className="h-6 w-6" />
             </span>

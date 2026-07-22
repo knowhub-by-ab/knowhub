@@ -9,6 +9,7 @@ const MdGuidePage = lazy(() => import("@/pages/MdGuidePage"));
 const MdEditorTab = lazy(() => import("@/components/deck/MdEditorTab"));
 import { useDeckStore, decks as deckOps, collections as colOps } from "@/lib/deckStore";
 import type { PresentationDeck, Collection, CollectionType } from "@/lib/deckStore";
+import type { PptTemplate } from "@/lib/types";
 import { useAppData } from "@/lib/store";
 import { useTemplates, templates as tplOps } from "@/lib/templateStore";
 import { exportPptx, THEMES } from "@/lib/deckExport";
@@ -389,7 +390,6 @@ function CollectionCard({ collection, decks, onOpen }: CollectionCardProps) {
 // ---------------------------------------------------------------------------
 // Template Library
 // ---------------------------------------------------------------------------
-import type { PptTemplate } from "@/lib/types";
 
 function TemplateLibrary({ templates, onImport }: { templates: PptTemplate[]; onImport: () => void }) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
