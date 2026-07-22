@@ -337,14 +337,67 @@ export interface TreeProposal {
 }
 
 /** Propose missing topics — returns proposals WITHOUT applying them. User accepts/rejects each. */
+export interface TreeImproveScope {
+  /** Root node id — mandatory. Only nodes within this root's subtree are considered. */
+  rootId: string;
+  /** Optional start node id (subtree root). Narrows scope to descendants of this node. */
+  startNodeId?: string;
+  /** Optional end node id. The depth of this node is used as the depth ceiling (inclusive). */
+  endNodeId?: string;
+}
+
 export async function proposeTreeImprovements(
   keys: ProviderKey[],
   nodes: AppData["nodes"],
-  topic: string
+  topic: string,
+  scope?: TreeImproveScope
 ): Promise<TreeProposal[]> {
-  const outline = nodes.length
+  // Build scoped node list
+  let scopedNodes = nodes;
+  if (scope?.rootId) {
+    // Collect all descendants of rootId (including root itself)
+    const allFlat = tree.flatten(nodes);
+    const rootEntry = allFlat.find((e) => e.node.id === scope.rootId);
+    if (rootEntry) {
+      const rootDepth = rootEntry.depth;
+      const inRoot = new Set<string>();
+      let inSubtree = false;
+      for (const { node, depth } of allFlat) {
+        if (node.id === scope.rootId) { inRoot.add(node.id); inSubtree = true; continue; }
+        if (inSubtree && depth > rootDepth) inRoot.add(node.id);
+        else if (inSubtree && depth <= rootDepth) inSubtree = false;
+      }
+      // Further narrow to start node subtree if specified
+      if (scope.startNodeId && inRoot.has(scope.startNodeId)) {
+        const startEntry = allFlat.find((e) => e.node.id === scope.startNodeId);
+        if (startEntry) {
+          const startDepth = startEntry.depth;
+          const inStart = new Set<string>();
+          let inSub = false;
+          for (const { node, depth } of allFlat) {
+            if (node.id === scope.startNodeId) { inStart.add(node.id); inSub = true; continue; }
+            if (inSub && depth > startDepth) inStart.add(node.id);
+            else if (inSub && depth <= startDepth) inSub = false;
+          }
+          inRoot.forEach((id) => { if (!inStart.has(id)) inRoot.delete(id); });
+          inRoot.add(scope.startNodeId);
+        }
+      }
+      // Apply depth ceiling from end node if specified
+      if (scope.endNodeId) {
+        const endEntry = allFlat.find((e) => e.node.id === scope.endNodeId);
+        if (endEntry) {
+          const maxDepth = endEntry.depth;
+          allFlat.forEach(({ node, depth }) => { if (depth > maxDepth) inRoot.delete(node.id); });
+        }
+      }
+      scopedNodes = nodes.filter((n) => inRoot.has(n.id));
+    }
+  }
+
+  const outline = scopedNodes.length
     ? tree
-        .flatten(nodes)
+        .flatten(scopedNodes)
         .map(({ node, depth }) => `${"  ".repeat(depth)}- [${node.id}] ${node.title}`)
         .join("\n")
     : "(empty tree)";

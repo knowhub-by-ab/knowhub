@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
 import { generateLearningTree, generateTreeChanges, proposeTreeImprovements, applyTreeProposals } from "@/lib/aiActions";
+import type { TreeImproveScope } from "@/lib/aiActions";
 import type { TreeProposal } from "@/lib/aiActions";
 import {
   STATUS_LABELS,
@@ -48,7 +49,7 @@ function NodeRow({
   depth: number;
 }) {
   const children = tree.childrenOf(nodes, node.id);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(depth < 2);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.title);
   const [adding, setAdding] = useState(false);
@@ -304,6 +305,10 @@ export default function LearningTreePage() {
   const LEVELS = ["Absolute Novice", "Beginner", "Intermediate", "Expert", "Advanced", "Professional", "Industry Standards"];
   const STYLES = ["Normal explanation", "Simple & concise", "Story-driven", "Academic / formal", "Practical & example-heavy"];
   const flat = tree.flatten(data.nodes);
+  // Tree improver scope
+  const [improveRootId, setImproveRootId] = useState<string>("");
+  const [improveStartId, setImproveStartId] = useState<string>("");
+  const [improveEndId, setImproveEndId] = useState<string>("");
 
   function addRoot() {
     if (newRoot.trim()) {
@@ -342,8 +347,35 @@ export default function LearningTreePage() {
   async function handleSyllabusFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setSyllabusError(null);
     try {
-      const text = await file.text();
+      let text = "";
+      if (file.name.toLowerCase().endsWith(".pdf")) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdfjsLib = await import("pdfjs-dist");
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url
+        ).toString();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pages: string[] = [];
+        for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          pages.push(content.items.map((it) => ("str" in it ? it.str : "")).join(" "));
+        }
+        text = pages.join("\n");
+      } else if (
+        file.name.toLowerCase().endsWith(".docx") ||
+        file.name.toLowerCase().endsWith(".doc")
+      ) {
+        const arrayBuffer = await file.arrayBuffer();
+        const mammoth = await import("mammoth");
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+      } else {
+        text = await file.text();
+      }
       setSyllabusText(text.slice(0, 12000));
     } catch {
       setSyllabusError("Could not read file. Try pasting the text instead.");
@@ -481,30 +513,104 @@ export default function LearningTreePage() {
             {genLoading ? "Generating…" : "Generate"}
           </button>
         </div>
-        {/* Improve tree */}
+        {/* Improve tree — scope controls */}
         {flat.length > 0 && !proposals && (
-          <button
-            onClick={async () => {
-              if (genLoading) return;
-              setGenError(null);
-              setGenLoading(true);
-              try {
-                const rootTitles = tree.childrenOf(data.nodes, null).map((n) => n.title).join(", ");
-                const p = await proposeTreeImprovements(data.aiKeys, data.nodes, rootTitles || "my learning tree");
-                const all = new Set(p.map((_, i) => i));
-                setProposals(p);
-                setAccepted(all);
-              } catch (err) {
-                setGenError(err instanceof Error ? err.message : "Improve failed.");
-              } finally {
-                setGenLoading(false);
-              }
-            }}
-            disabled={genLoading}
-            className="mt-2 text-xs text-brand-300 hover:underline disabled:opacity-50"
-          >
-            {genLoading ? "Analysing tree…" : "✨ Improve tree — suggest missing topics"}
-          </button>
+          <div className="mt-3 space-y-2 rounded-xl border border-white/10 bg-slate-900/40 p-3">
+            <p className="text-xs font-semibold text-slate-300">✨ Improve tree</p>
+            {/* Mandatory: root tree selector */}
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Learning tree <span className="text-rose-400">*</span></label>
+              <select
+                value={improveRootId}
+                onChange={(e) => { setImproveRootId(e.target.value); setImproveStartId(""); setImproveEndId(""); }}
+                className="w-full rounded-lg border border-white/15 bg-slate-800 px-2 py-1.5 text-xs text-white outline-none focus:border-brand-500"
+              >
+                <option value="">Select a tree…</option>
+                {roots.map((r) => (
+                  <option key={r.id} value={r.id}>{r.title}</option>
+                ))}
+              </select>
+            </div>
+            {/* Optional: start node (subtree root) */}
+            {improveRootId && (
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Start node <span className="text-slate-500">(optional — narrow to a subtree)</span></label>
+                <select
+                  value={improveStartId}
+                  onChange={(e) => { setImproveStartId(e.target.value); setImproveEndId(""); }}
+                  className="w-full rounded-lg border border-white/15 bg-slate-800 px-2 py-1.5 text-xs text-white outline-none focus:border-brand-500"
+                >
+                  <option value="">Whole tree</option>
+                  {flat
+                    .filter((e) => {
+                      // Only show nodes inside the selected root
+                      let n: typeof e.node | undefined = e.node;
+                      while (n) {
+                        if (n.id === improveRootId) return true;
+                        n = data.nodes.find((x) => x.id === n!.parentId);
+                      }
+                      return false;
+                    })
+                    .map(({ node, depth }) => (
+                      <option key={node.id} value={node.id}>{"  ".repeat(depth)}{node.title}</option>
+                    ))}
+                </select>
+              </div>
+            )}
+            {/* Optional: end node (depth ceiling) */}
+            {improveRootId && (
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">End node depth <span className="text-slate-500">(optional — sets max depth)</span></label>
+                <select
+                  value={improveEndId}
+                  onChange={(e) => setImproveEndId(e.target.value)}
+                  className="w-full rounded-lg border border-white/15 bg-slate-800 px-2 py-1.5 text-xs text-white outline-none focus:border-brand-500"
+                >
+                  <option value="">No limit</option>
+                  {flat
+                    .filter((e) => {
+                      let n: typeof e.node | undefined = e.node;
+                      while (n) {
+                        if (n.id === improveRootId) return true;
+                        n = data.nodes.find((x) => x.id === n!.parentId);
+                      }
+                      return false;
+                    })
+                    .map(({ node, depth }) => (
+                      <option key={node.id} value={node.id}>{"  ".repeat(depth)}{node.title}</option>
+                    ))}
+                </select>
+              </div>
+            )}
+            <button
+              onClick={async () => {
+                if (genLoading || !improveRootId) return;
+                setGenError(null);
+                setGenLoading(true);
+                try {
+                  const rootNode = data.nodes.find((n) => n.id === improveRootId);
+                  const topic = rootNode?.title ?? "my learning tree";
+                  const scope: TreeImproveScope = {
+                    rootId: improveRootId,
+                    startNodeId: improveStartId || undefined,
+                    endNodeId: improveEndId || undefined,
+                  };
+                  const p = await proposeTreeImprovements(data.aiKeys, data.nodes, topic, scope);
+                  const all = new Set(p.map((_, i) => i));
+                  setProposals(p);
+                  setAccepted(all);
+                } catch (err) {
+                  setGenError(err instanceof Error ? err.message : "Improve failed.");
+                } finally {
+                  setGenLoading(false);
+                }
+              }}
+              disabled={genLoading || !improveRootId}
+              className="w-full rounded-lg bg-brand-600/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-40"
+            >
+              {genLoading ? "Analysing…" : "Suggest missing topics"}
+            </button>
+          </div>
         )}
 
         {/* Proposal review panel */}

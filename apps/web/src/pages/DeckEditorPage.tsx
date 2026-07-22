@@ -386,12 +386,7 @@ export default function DeckEditorPage() {
           />
           <div className="border-t border-zinc-800 pt-3">
             <p className="text-xs font-medium text-zinc-400 mb-2">Voice Cloning</p>
-            <VoiceClonePanel
-              deckId={deck.id}
-              clonedVoiceId={deck.frontmatter.clonedVoiceId}
-              clonedVoiceProvider={deck.frontmatter.clonedVoiceProvider}
-              aiKeys={aiKeys}
-            />
+            <VoiceClonePanel aiKeys={aiKeys} />
           </div>
         </div>
       </div>

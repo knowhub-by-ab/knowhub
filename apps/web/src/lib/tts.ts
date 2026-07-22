@@ -183,6 +183,38 @@ export function getAvailableVoices(): SpeechSynthesisVoice[] {
   return window.speechSynthesis.getVoices();
 }
 
+// ---------------------------------------------------------------------------
+// Android media session (lock-screen / notification controls)
+// ---------------------------------------------------------------------------
+
+function setMediaSession(title: string) {
+  if (!("mediaSession" in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: title || "KnowHub",
+    artist: "KnowHub",
+    album: "Podcast",
+    artwork: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+  });
+  navigator.mediaSession.setActionHandler("play", () => resumeTTS());
+  navigator.mediaSession.setActionHandler("pause", () => pauseTTS());
+  navigator.mediaSession.setActionHandler("stop", () => stopTTS());
+  navigator.mediaSession.setActionHandler("seekbackward", () => rewind(30));
+  navigator.mediaSession.setActionHandler("seekforward", () => fastForward(30));
+}
+
+function clearMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  navigator.mediaSession.metadata = null;
+  (["play", "pause", "stop", "seekbackward", "seekforward"] as MediaSessionAction[]).forEach((a) => {
+    try { navigator.mediaSession.setActionHandler(a, null); } catch { /* unsupported action */ }
+  });
+}
+
+function updateMediaSessionState(state: "playing" | "paused" | "none") {
+  if (!("mediaSession" in navigator)) return;
+  navigator.mediaSession.playbackState = state;
+}
+
 function update(patch: Partial<TTSState>) {
   _state = { ..._state, ...patch };
   notify();
@@ -238,6 +270,8 @@ export function speak(text: string, opts?: { title?: string; rate?: number; voic
       title: opts?.title ?? "", text, charIndex: 0, progress: 0,
       rate: opts?.rate ?? _state.rate, voiceURI: opts?.voiceURI ?? _state.voiceURI,
     });
+    setMediaSession(opts?.title ?? "");
+    updateMediaSessionState("playing");
     nativeSpeak(text, opts?.rate ?? _state.rate);
     return;
   }
@@ -297,6 +331,8 @@ export function speak(text: string, opts?: { title?: string; rate?: number; voic
     progress: 0,
   });
 
+  setMediaSession(opts?.title ?? "");
+  updateMediaSessionState("playing");
   window.speechSynthesis.speak(_utt);
   startPoll();
 }
@@ -308,12 +344,14 @@ export function pauseTTS(): void {
     clearNativeTimer();
     nativeStopAudio();
     update({ playing: false, paused: true });
+    updateMediaSessionState("paused");
     return;
   }
-  if (_puterAudio) { _puterAudio.pause(); update({ playing: false, paused: true }); return; }
+  if (_puterAudio) { _puterAudio.pause(); update({ playing: false, paused: true }); updateMediaSessionState("paused"); return; }
   if (!isTTSSupported()) return;
   window.speechSynthesis.pause();
   update({ playing: false, paused: true });
+  updateMediaSessionState("paused");
 }
 
 export function resumeTTS(): void {
@@ -321,18 +359,22 @@ export function resumeTTS(): void {
     // Restart speech from the remaining text (Android TTS has no mid-utterance resume)
     const resumeText = _state.text.slice(_state.charIndex);
     update({ playing: true, paused: false });
+    updateMediaSessionState("playing");
     nativeSpeak(resumeText.trim() || _state.text, _state.rate, _nativePauseElapsed);
     return;
   }
   if (isNative()) return;
-  if (_puterAudio) { void _puterAudio.play(); update({ playing: true, paused: false }); return; }
+  if (_puterAudio) { void _puterAudio.play(); update({ playing: true, paused: false }); updateMediaSessionState("playing"); return; }
   if (!isTTSSupported()) return;
   window.speechSynthesis.resume();
   update({ playing: true, paused: false });
+  updateMediaSessionState("playing");
   startPoll();
 }
 
 export function stopTTS(): void {
+  clearMediaSession();
+  updateMediaSessionState("none");
   if (isNative()) { clearNativeTimer(); nativeStopAudio(); update({ ...DEFAULT_STATE }); return; }
   if (_puterAudio) {
     _puterAudio.pause();
@@ -446,6 +488,8 @@ export async function speakViaPuter(text: string, opts?: { title?: string }): Pr
     };
     await audio.play();
     update({ active: true, playing: true, paused: false });
+    setMediaSession(opts?.title ?? "");
+    updateMediaSessionState("playing");
   } catch (err) {
     _puterAudio = null;
     update({ active: false, playing: false, paused: false });

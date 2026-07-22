@@ -16,7 +16,7 @@ import {
   FolderPlus,
 } from "lucide-react";
 import { useAppData, chatSessions as sessionsStore, chatFolders as foldersStore } from "@/lib/store";
-import { chatStream, AiError } from "@/lib/ai";
+import { chatStream, chatCompletion, AiError } from "@/lib/ai";
 import { buildTutorContext } from "@/lib/aiActions";
 import { renderMarkdown } from "@/lib/markdown";
 import type { ChatMessage } from "@/lib/types";
@@ -126,12 +126,11 @@ export default function AiChatPage() {
       setActiveId(sid);
     }
 
+    const isFirstMessage = messages.length === 0;
     const next: ChatMessage[] = [...messages, { role: "user", content: text }];
     sessionsStore.setMessages(sid, next);
-    // Auto-title from first message
-    if (messages.length === 0) {
-      sessionsStore.rename(sid, text.slice(0, 40));
-    }
+    // Provisional title from first message while AI title generates
+    if (isFirstMessage) sessionsStore.rename(sid, text.slice(0, 40));
     setInput("");
     setLoading(true);
 
@@ -157,6 +156,17 @@ export default function AiChatPage() {
         },
         "other"
       );
+      // After first exchange, ask AI to generate a short descriptive title
+      if (isFirstMessage && acc) {
+        const snapshot = sid;
+        chatCompletion(data.aiKeys, [
+          { role: "system", content: "Generate a concise 4-6 word chat title summarising this conversation topic. Return ONLY the title text — no punctuation, no quotes, no explanation." },
+          { role: "user", content: `User: ${text}\nAssistant: ${acc.slice(0, 300)}` },
+        ], "other").then(({ content }) => {
+          const title = content.trim().slice(0, 60);
+          if (title) sessionsStore.rename(snapshot!, title);
+        }).catch(() => { /* keep provisional title on failure */ });
+      }
     } catch (err) {
       setError(err instanceof AiError ? err.message : "Something went wrong.");
       sessionsStore.setMessages(sid, next);

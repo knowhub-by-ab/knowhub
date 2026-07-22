@@ -198,6 +198,10 @@ export interface AppData {
   chatFolders: ChatFolder[];
   /** Puter API token for TTS/MP3 download (stored locally only, never synced). */
   puterApiToken?: string;
+  /** Global cloned voice ID shared across all decks/podcast (Fish Audio, ElevenLabs, Resemble AI). */
+  clonedVoiceId?: string;
+  /** Provider that produced the global cloned voice. */
+  clonedVoiceProvider?: "elevenlabs" | "fishaudio" | "resembleai";
 }
 
 export interface VideoRec {
@@ -308,9 +312,9 @@ export interface DeckFrontmatter {
   /** Background colour extracted from the POTX template (hex). When set, the
    *  slide preview uses this directly instead of the built-in theme palette. */
   backgroundColor?: string;
-  /** Cloned voice ID for narration (from Fish Audio, ElevenLabs, or Resemble AI). */
+  /** @deprecated Use AppData.clonedVoiceId instead. Kept for migration only. */
   clonedVoiceId?: string;
-  /** Provider that created the cloned voice. */
+  /** @deprecated Use AppData.clonedVoiceProvider instead. Kept for migration only. */
   clonedVoiceProvider?: "elevenlabs" | "fishaudio" | "resembleai";
   /** Logo image as base64 data URL to overlay on every slide. */
   logoUrl?: string;

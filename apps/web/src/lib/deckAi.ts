@@ -31,7 +31,7 @@ function buildOutlineSystemPrompt(fm: DeckFrontmatter): string {
 CREATIVE RULES — make slides look like a professional deck:
 - Titles should be ACTION-ORIENTED or INSIGHT-DRIVEN (not just topic labels). Examples: "72% of Teams Fail Without This" not "Team Challenges". "Three Steps to Digital Transformation" not "Digital Transformation Steps".
 - bullets: use SPECIFIC, CONCRETE content — statistics, named frameworks, real examples. Avoid vague generic statements. Max 5 bullets per slide, max 15 words each. NO markdown syntax.
-- callout: a single powerful insight, key statistic, or memorable quote for this slide (1 sentence, max 20 words). Leave empty ("") for title/section/closing slides.
+- callout: OPTIONAL — include ONLY when there is a genuinely powerful stat, memorable quote, or key insight that adds real value. Leave as "" when the bullets already speak clearly. Never force one.
 - imagePrompt: a specific, vivid visual description (10-20 words) for an AI image generator. Every content slide MUST have one. Be specific — "a diverse team collaborating around a whiteboard with sticky notes" not "teamwork".
 - speakerNotes: 2-4 sentences of presenter context, data sources, or talking points.
 - narrationScript: 2-4 natural spoken sentences for text-to-speech, as if speaking aloud to an audience.

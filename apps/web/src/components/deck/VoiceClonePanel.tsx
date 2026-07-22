@@ -3,12 +3,9 @@ import { Mic, Upload, Loader2, X } from "lucide-react";
 import type { ProviderKey } from "@/lib/types";
 import type { VoiceProvider } from "@/lib/deckVoiceClone";
 import { PROVIDER_PRESETS } from "@/lib/providers";
-import { decks as deckOps } from "@/lib/deckStore";
+import { useAppData, updateAppData } from "@/lib/store";
 
 interface VoiceClonePanelProps {
-  deckId: string;
-  clonedVoiceId?: string;
-  clonedVoiceProvider?: "elevenlabs" | "fishaudio" | "resembleai";
   aiKeys: ProviderKey[];
 }
 
@@ -24,12 +21,10 @@ const PROVIDER_LABELS: Record<VoiceProvider, string> = {
   resembleai: "Resemble AI",
 };
 
-export default function VoiceClonePanel({
-  deckId,
-  clonedVoiceId,
-  clonedVoiceProvider,
-  aiKeys,
-}: VoiceClonePanelProps) {
+export default function VoiceClonePanel({ aiKeys }: VoiceClonePanelProps) {
+  const data = useAppData();
+  const { clonedVoiceId, clonedVoiceProvider } = data;
+
   const [voiceName, setVoiceName] = useState("My Voice");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [cloning, setCloning] = useState(false);
@@ -62,10 +57,7 @@ export default function VoiceClonePanel({
     try {
       const { cloneVoice } = await import("@/lib/deckVoiceClone");
       const result = await cloneVoice(provider, apiKey, sampleFile, voiceName.trim() || "My Voice");
-      deckOps.updateFrontmatter(deckId, {
-        clonedVoiceId: result.voiceId,
-        clonedVoiceProvider: result.provider,
-      });
+      updateAppData({ clonedVoiceId: result.voiceId, clonedVoiceProvider: result.provider });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Voice cloning failed.");
     } finally {
@@ -74,10 +66,7 @@ export default function VoiceClonePanel({
   }
 
   function handleRemove() {
-    deckOps.updateFrontmatter(deckId, {
-      clonedVoiceId: undefined,
-      clonedVoiceProvider: undefined,
-    });
+    updateAppData({ clonedVoiceId: undefined, clonedVoiceProvider: undefined });
   }
 
   if (clonedVoiceId && clonedVoiceProvider) {
@@ -85,7 +74,7 @@ export default function VoiceClonePanel({
       <div className="flex items-center justify-between gap-2 p-2 bg-emerald-900/20 border border-emerald-800 rounded-lg">
         <div className="flex items-center gap-2 text-xs text-emerald-400">
           <Mic size={12} />
-          Voice clone active — {PROVIDER_LABELS[clonedVoiceProvider]}
+          Voice clone active — {PROVIDER_LABELS[clonedVoiceProvider]} (global, applies to all decks)
         </div>
         <button onClick={handleRemove} className="text-zinc-500 hover:text-red-400 transition-colors">
           <X size={13} />
@@ -98,6 +87,9 @@ export default function VoiceClonePanel({
     <div className="space-y-2">
       <p className="text-xs text-zinc-400">
         Provider: <span className="text-zinc-200">{PROVIDER_LABELS[provider]}</span>
+      </p>
+      <p className="text-xs text-zinc-500">
+        Your cloned voice is stored globally and reused across all presentations.
       </p>
 
       <input

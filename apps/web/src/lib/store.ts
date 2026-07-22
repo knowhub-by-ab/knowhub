@@ -657,3 +657,8 @@ export function summarizeProgress(nodes: TreeNode[]): ProgressSummary {
 export function setPuterApiToken(token: string) {
   setState((prev) => ({ ...prev, puterApiToken: token.trim() || undefined }));
 }
+
+/** Generic shallow-merge update for top-level AppData fields. */
+export function updateAppData(patch: Partial<AppData>) {
+  setState((prev) => ({ ...prev, ...patch }));
+}

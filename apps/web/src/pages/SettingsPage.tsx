@@ -31,7 +31,8 @@ function mask(key: string): string {
   return `${key.slice(0, 6)}…${key.slice(-4)}`;
 }
 
-const CURRENT_VERSION = "1.0.3";
+declare const __APP_VERSION__: string;
+const CURRENT_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.1.0";
 
 function CheckForUpdates() {
   const [status, setStatus] = useState<"idle" | "checking" | "latest" | "update">("idle");

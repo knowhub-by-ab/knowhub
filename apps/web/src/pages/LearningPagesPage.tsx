@@ -561,7 +561,7 @@ export default function LearningPagesPage() {
                 </div>
                 <button
                   onClick={() => {
-                    if (selectedId) navigate(`/app/videos?pageId=${selectedId}&autoFetch=1`);
+                    if (selectedId) navigate(`/app/videos?pageId=${selectedId}`);
                   }}
                   disabled={!selectedId}
                   title="Find YouTube videos for this page"

@@ -35,37 +35,12 @@ export default function VideosPage() {
 
   useEffect(() => {
     const pid = searchParams.get("pageId");
-    const auto = searchParams.get("autoFetch") === "1";
     if (pid && data.nodes.some((n) => n.id === pid)) {
       setSelectedPageId(pid);
-      if (auto) {
-        const hasVideos = data.videos.some((v) => v.pageId === pid && v.kept);
-        if (!hasVideos) {
-          // auto-trigger suggest after a short delay to let state settle
-          setTimeout(() => suggestForPage(pid), 300);
-        }
-      }
+      // Video suggestions are always user-initiated — never auto-triggered
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function suggestForPage(pageId: string) {
-    if (loading) return;
-    const pageText = data.pages[pageId];
-    if (!pageText) return;
-    setError(null);
-    setLoading(true);
-    try {
-      await suggestVideos(data.aiKeys, { pageText, pageId });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Suggestion failed.";
-      setError(msg === "YOUTUBE_API_KEY_MISSING"
-        ? "YouTube Data API key not configured. Add YOUTUBE_API_KEY to Cloudflare Pages env vars."
-        : msg);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function suggest() {
     if (loading) return;
