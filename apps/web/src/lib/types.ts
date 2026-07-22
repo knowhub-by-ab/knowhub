@@ -68,6 +68,18 @@ export interface Resource {
   url: string;
   type: ResourceType;
   createdAt: number;
+  /** Optional collection this resource belongs to (collection id). */
+  collectionId?: string;
+  /** Sort order within a collection (lower = first). */
+  order?: number;
+}
+
+export interface ResourceCollection {
+  id: string;
+  name: string;
+  /** Sort order of collection itself (lower = first). */
+  order: number;
+  createdAt: number;
 }
 
 export interface Question {
@@ -188,6 +200,8 @@ export interface AppData {
   notesList: Note[];
   /** Resource library (spec: Module 14). */
   resources: Resource[];
+  /** Resource collections (groupings with rename + sort). */
+  resourceCollections: ResourceCollection[];
   /** MCQ assessments (spec: Module 9). */
   quizzes: Quiz[];
   /** Configured AI provider keys, in fallback-priority order. */

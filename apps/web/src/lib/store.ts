@@ -20,6 +20,7 @@ import type {
   Flashcard,
   Highlight,
   VideoRec,
+  ResourceCollection,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -43,6 +44,7 @@ const DEFAULT_DATA: AppData = {
   questionBanks: [],
   flashcards: [],
   flashcardDecks: [],
+  resourceCollections: [],
   highlights: [],
   videos: [],
   chatFolders: [],
@@ -92,6 +94,7 @@ function load(): AppData {
       questionBanks: parsed.questionBanks ?? [],
       flashcards: parsed.flashcards ?? [],
       flashcardDecks: parsed.flashcardDecks ?? [],
+      resourceCollections: parsed.resourceCollections ?? [],
       highlights: parsed.highlights ?? [],
       videos: parsed.videos ?? [],
       chatFolders: parsed.chatFolders ?? [],
@@ -196,6 +199,7 @@ function merged(next: Partial<AppData>): AppData {
     questionBanks: next.questionBanks ?? [],
     flashcards: next.flashcards ?? [],
     flashcardDecks: next.flashcardDecks ?? [],
+    resourceCollections: next.resourceCollections ?? [],
     highlights: next.highlights ?? [],
     videos: next.videos ?? [],
     chatFolders: next.chatFolders ?? [],
@@ -411,12 +415,14 @@ export const notes = {
 // --- Resources --------------------------------------------------------------
 
 export const resources = {
-  add(input: { title: string; url: string; type: ResourceType }): Resource {
+  add(input: { title: string; url: string; type: ResourceType; collectionId?: string }): Resource {
     const r: Resource = {
       id: uid(),
       title: input.title.trim() || "Untitled",
       url: input.url.trim(),
       type: input.type,
+      collectionId: input.collectionId,
+      order: Date.now(),
       createdAt: Date.now(),
     };
     setState((prev) => ({ ...prev, resources: [r, ...prev.resources] }));
@@ -427,6 +433,59 @@ export const resources = {
       ...prev,
       resources: prev.resources.filter((r) => r.id !== id),
     }));
+  },
+  rename(id: string, title: string) {
+    setState((prev) => ({ ...prev, resources: prev.resources.map((r) => r.id === id ? { ...r, title } : r) }));
+  },
+  move(id: string, direction: "up" | "down") {
+    setState((prev) => {
+      const r = prev.resources.find((x) => x.id === id);
+      if (!r) return prev;
+      const group = prev.resources.filter((x) => x.collectionId === r.collectionId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const idx = group.findIndex((x) => x.id === id);
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= group.length) return prev;
+      const [a, b] = [group[idx], group[swapIdx]];
+      const aOrder = a.order ?? 0;
+      const bOrder = b.order ?? 1;
+      return {
+        ...prev,
+        resources: prev.resources.map((x) => x.id === a.id ? { ...x, order: bOrder } : x.id === b.id ? { ...x, order: aOrder } : x),
+      };
+    });
+  },
+  setCollection(id: string, collectionId: string | undefined) {
+    setState((prev) => ({ ...prev, resources: prev.resources.map((r) => r.id === id ? { ...r, collectionId } : r) }));
+  },
+};
+
+export const resourceCollections = {
+  create(name: string): ResourceCollection {
+    const c: ResourceCollection = { id: uid(), name, order: Date.now(), createdAt: Date.now() };
+    setState((prev) => ({ ...prev, resourceCollections: [...prev.resourceCollections, c] }));
+    return c;
+  },
+  rename(id: string, name: string) {
+    setState((prev) => ({ ...prev, resourceCollections: prev.resourceCollections.map((c) => c.id === id ? { ...c, name } : c) }));
+  },
+  remove(id: string) {
+    setState((prev) => ({
+      ...prev,
+      resourceCollections: prev.resourceCollections.filter((c) => c.id !== id),
+      // Move resources to uncollected
+      resources: prev.resources.map((r) => r.collectionId === id ? { ...r, collectionId: undefined } : r),
+    }));
+  },
+  move(id: string, direction: "up" | "down") {
+    setState((prev) => {
+      const sorted = [...prev.resourceCollections].sort((a, b) => a.order - b.order);
+      const idx = sorted.findIndex((c) => c.id === id);
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= sorted.length) return prev;
+      const [a, b] = [sorted[idx], sorted[swapIdx]];
+      [a.order, b.order] = [b.order, a.order];
+      return { ...prev, resourceCollections: sorted };
+    });
   },
 };
 
