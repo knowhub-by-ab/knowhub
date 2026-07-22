@@ -1,7 +1,7 @@
 import { useSyncExternalStore, useState, useEffect, useRef } from "react";
-import { Mic, Play, Square, Clock, ChevronRight, ChevronDown, SkipBack, SkipForward } from "lucide-react";
-import { useAppData } from "@/lib/store";
-import { speak, stopTTS, subscribeToTTS, getTTSState, markdownToSpeakable, isTTSSupported } from "@/lib/tts";
+import { Mic, Play, Square, Clock, ChevronRight, ChevronDown, SkipBack, SkipForward, Download, Loader2 } from "lucide-react";
+import { useAppData, getState } from "@/lib/store";
+import { speak, stopTTS, subscribeToTTS, getTTSState, markdownToSpeakable, isTTSSupported, puterTTSBlob } from "@/lib/tts";
 import type { TreeNode } from "@/lib/types";
 import { setPodcastEpisodes, setPodcastCurrentIdx, clearPodcast } from "@/lib/podcastStore";
 import type { PodcastEpisode } from "@/lib/podcastStore";
@@ -63,6 +63,86 @@ export default function PodcastPage() {
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [playingId, ttsState.active]);
+
+  // Download / recording state
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  async function downloadEpisode(nodeId: string, title: string, text: string) {
+    if (downloadingId) return;
+    setDownloadingId(nodeId);
+    setDownloadError(null);
+
+    // Try puter TTS first — gives a clean audio blob without screen sharing
+    const puterToken = getState().puterApiToken ?? "";
+    if (puterToken) {
+      try {
+        const blob = await puterTTSBlob(text, puterToken);
+        triggerDownload(blob, `${title.replace(/[^\w\s-]/g, "")}.mp3`);
+        setDownloadingId(null);
+        return;
+      } catch {
+        // Fall through to tab audio capture
+      }
+    }
+
+    // Tab audio capture via getDisplayMedia
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setDownloadError("Audio capture not supported in this browser. Add a Puter API token in Settings for direct download.");
+      setDownloadingId(null);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: false,
+        audio: true,
+      } as DisplayMediaStreamOptions);
+
+      const chunks: Blob[] = [];
+      chunksRef.current = chunks;
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        const ext = recorder.mimeType.includes("ogg") ? "ogg" : "webm";
+        triggerDownload(blob, `${title.replace(/[^\w\s-]/g, "")}.${ext}`);
+        setDownloadingId(null);
+      };
+
+      recorder.start();
+
+      // Start TTS — recorder captures the tab audio
+      speak(text, { title });
+      setPlayingId(nodeId);
+
+      // Stop recorder when TTS finishes
+      const unsub = subscribeToTTS(() => {
+        const s = getTTSState();
+        if (!s.active && recorder.state === "recording") {
+          recorder.stop();
+          unsub();
+        }
+      });
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Capture failed. Grant tab audio permission when prompted.");
+      setDownloadingId(null);
+    }
+  }
+
+  function triggerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
 
   function buildEpList(): PodcastEpisode[] {
     return allOrdered.map((n) => ({
@@ -244,6 +324,7 @@ export default function PodcastPage() {
                         </div>
 
                         {/* Play / Resume / Playing */}
+                        <div className="shrink-0 flex items-center gap-1.5">
                         {isThisPlaying ? (
                           <span className="flex items-center gap-1 text-xs text-brand-400 shrink-0">
                             <span className="relative flex h-2 w-2">
@@ -274,6 +355,24 @@ export default function PodcastPage() {
                             {hasProgress ? "Resume" : "Play"}
                           </button>
                         )}
+                        {/* Download audio */}
+                        <button
+                          onClick={() => {
+                            const body = data.pages[node.id] ?? "";
+                            const text = markdownToSpeakable(body);
+                            void downloadEpisode(node.id, node.title, text);
+                          }}
+                          disabled={!!downloadingId}
+                          title="Download audio"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-slate-400 hover:text-white disabled:opacity-30 transition"
+                        >
+                          {downloadingId === node.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -282,6 +381,9 @@ export default function PodcastPage() {
             })}
           </div>
 
+          {downloadError && (
+            <p className="mt-3 text-center text-xs text-rose-400">{downloadError}</p>
+          )}
           <p className="mt-6 text-center text-xs text-slate-600">
             {allOrdered.length} episode{allOrdered.length === 1 ? "" : "s"} · Click a root to expand its episodes.
           </p>

@@ -19,7 +19,7 @@ import {
   Upload,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
-import { generateLearningTree, generateTreeChanges, proposeTreeImprovements, applyTreeProposals } from "@/lib/aiActions";
+import { proposeNewTree, proposeTreeChanges, proposeTreeImprovements, applyTreeProposals } from "@/lib/aiActions";
 import type { TreeImproveScope } from "@/lib/aiActions";
 import type { TreeProposal } from "@/lib/aiActions";
 import {
@@ -326,16 +326,16 @@ export default function LearningTreePage() {
     setGenError(null);
     setGenLoading(true);
     try {
+      let p;
       if (genParent === "__force_top__") {
-        // Force a brand-new top-level topic + its sub-tree.
-        await generateLearningTree(data.aiKeys, topic, null);
+        p = await proposeNewTree(data.aiKeys, topic, null);
       } else if (genParent) {
-        // Force everything under the chosen existing node.
-        await generateLearningTree(data.aiKeys, topic, genParent);
+        p = await proposeNewTree(data.aiKeys, topic, genParent);
       } else {
-        // Default: let the AI decide what to add and where.
-        await generateTreeChanges(data.aiKeys, topic, data.nodes);
+        p = await proposeTreeChanges(data.aiKeys, topic, data.nodes);
       }
+      setProposals(p);
+      setAccepted(new Set(p.map((_, i) => i)));
       setGenTopic("");
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Generation failed.");
@@ -389,7 +389,10 @@ export default function LearningTreePage() {
     setSyllabusLoading(true);
     try {
       const instruction = `Generate a comprehensive learning tree based on this syllabus/curriculum:\n\n${syllabusText}\n\nCreate a structured hierarchy of topics and subtopics covering all subjects in this syllabus.`;
-      await generateLearningTree(data.aiKeys, instruction);
+      const p = await proposeNewTree(data.aiKeys, instruction, null);
+      setProposals(p);
+      setAccepted(new Set(p.map((_, i) => i)));
+      setSyllabusMode(false);
     } catch (err) {
       setSyllabusError(err instanceof Error ? err.message : "Generation failed.");
     } finally {

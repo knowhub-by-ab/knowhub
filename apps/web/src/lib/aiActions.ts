@@ -134,6 +134,100 @@ export async function generateLearningTree(
   return count;
 }
 
+/** Like generateLearningTree but returns proposals for the preview panel instead of adding directly. */
+export async function proposeNewTree(
+  keys: ProviderKey[],
+  topic: string,
+  parentId: string | null = null
+): Promise<TreeProposal[]> {
+  const messages: ChatMessage[] = [
+    { role: "system", content: "You output ONLY valid JSON. No prose, no code fences." },
+    {
+      role: "user",
+      content:
+        `Create a structured learning path for "${topic}", progressing from absolute ` +
+        `beginner to industry professional. Return a JSON array of 4-8 top-level topics. ` +
+        `Each item: {"title": string, "children": [ up to ~5 sub-topics, each also ` +
+        `{"title", "children"?} ]}. Keep titles short. Max depth 3.`,
+    },
+  ];
+  const data = await chatJSON<GenNode[] | { topics?: GenNode[] }>(keys, messages, "tree");
+  const topics = Array.isArray(data) ? data : data.topics ?? [];
+  if (!topics.length) throw new Error("The AI returned no topics. Try again.");
+
+  const genNodeToProposals = (nodes: GenNode[], pid: string | null): TreeProposal[] =>
+    nodes
+      .filter((n) => n?.title)
+      .map((n) => ({
+        parentId: pid,
+        parentTitle: null,
+        title: String(n.title).slice(0, 120),
+        children: (n.children ?? []).filter((c) => c?.title).map((c) => String(c.title).slice(0, 120)),
+      }));
+
+  if (parentId) {
+    return genNodeToProposals(topics, parentId);
+  }
+  // Create a synthetic root — represented as a top-level proposal with children
+  return [{
+    parentId: null,
+    parentTitle: null,
+    title: topic,
+    children: topics.filter((n) => n?.title).map((n) => String(n.title).slice(0, 120)),
+    // Note: grandchildren are lost in proposal flat format — acceptable for preview UX
+  }];
+}
+
+/** Like generateTreeChanges but returns proposals for the preview panel instead of adding directly. */
+export async function proposeTreeChanges(
+  keys: ProviderKey[],
+  prompt: string,
+  nodes: AppData["nodes"]
+): Promise<TreeProposal[]> {
+  const outline = nodes.length
+    ? tree
+        .flatten(nodes)
+        .map(({ node, depth }) => `${"  ".repeat(depth)}- [${node.id}] ${node.title}`)
+        .join("\n")
+    : "(the tree is currently empty)";
+
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You edit a learner's topic tree. Output ONLY JSON of this shape: " +
+        '{"additions":[{"parentId": string|null, "title": string, "children"?: ' +
+        '[{"title": string}]}]}. ' +
+        "`parentId` MUST be one of the [id] values shown in the tree (to nest under an " +
+        "existing topic), or null to create a new top-level topic. Keep titles short.",
+    },
+    {
+      role: "user",
+      content: `Request: "${prompt}"\n\nCurrent tree:\n${outline}\n\nPropose additions only.`,
+    },
+  ];
+
+  interface Addition { parentId?: string | null; title: string; children?: { title: string }[]; }
+  const data = await chatJSON<{ additions?: Addition[] }>(keys, messages, "tree");
+  const additions = data.additions ?? [];
+  if (!additions.length) throw new Error("No additions suggested.");
+
+  const nodeMap = new Map(nodes.map((n) => [n.id, n.title]));
+  const valid = new Set(nodes.map((n) => n.id));
+
+  return additions
+    .filter((a) => a?.title)
+    .map((a) => {
+      const pid = a.parentId && valid.has(a.parentId) ? a.parentId : null;
+      return {
+        parentId: pid,
+        parentTitle: pid ? (nodeMap.get(pid) ?? null) : null,
+        title: String(a.title).slice(0, 120),
+        children: (a.children ?? []).filter((c) => c?.title).map((c) => String(c.title).slice(0, 120)),
+      };
+    });
+}
+
 interface Addition {
   parentId?: string | null;
   title: string;
