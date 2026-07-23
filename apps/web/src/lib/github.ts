@@ -478,6 +478,59 @@ export async function syncDecksToRepo(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Course store sync — stored in knowhub-courses.json
+// ---------------------------------------------------------------------------
+
+import type { YTCourse } from "./courseStore";
+
+export interface CoursesExport {
+  version: 1;
+  exportedAt: string;
+  courses: YTCourse[];
+}
+
+/** Push the course store to knowhub-courses.json (delta — skips if unchanged). */
+export async function syncCoursesToRepo(
+  token: string,
+  owner: string,
+  repo: string,
+  courses: YTCourse[],
+  onProgress?: (msg: string) => void
+): Promise<void> {
+  if (!courses.length) return;
+  const hashes = loadHashes();
+  const path = "knowhub-courses.json";
+  const exportData: CoursesExport = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    courses,
+  };
+  const json = JSON.stringify(exportData, null, 2);
+  const h = quickHash(json);
+  if (hashes[path] !== h) {
+    onProgress?.("Pushing courses…");
+    await putFile(token, owner, repo, path, json, `knowhub: sync courses ${new Date().toISOString()}`);
+    hashes[path] = h;
+    saveHashes(hashes);
+  }
+}
+
+/** Pull knowhub-courses.json from the repo. Returns null if file doesn't exist yet. */
+export async function importCoursesFromRepo(
+  token: string,
+  owner: string,
+  repo: string
+): Promise<CoursesExport | null> {
+  const text = await getFileText(token, owner, repo, "knowhub-courses.json");
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed.version !== 1) return null;
+    return parsed as CoursesExport;
+  } catch { return null; }
+}
+
 /** Pull knowhub-decks.json from the repo. Returns null if file doesn't exist yet. */
 export async function importDecksFromRepoFile(
   token: string,

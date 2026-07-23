@@ -1,6 +1,7 @@
-import { ensureRepo, importFromRepo, syncToRepo, syncDecksToRepo, importDecksFromRepoFile } from "./github";
+import { ensureRepo, importFromRepo, syncToRepo, syncDecksToRepo, importDecksFromRepoFile, syncCoursesToRepo, importCoursesFromRepo } from "./github";
 import { getState, replaceAll, setGithub } from "./store";
 import { getDeckStoreState, importDecksFromGitHub } from "./deckStore";
+import { courseOps } from "./courseStore";
 
 // Shared "sync to GitHub now" action used by the Repository page and the global
 // top-bar Sync button. Bidirectional: push local changes first (delta), then
@@ -20,6 +21,9 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
 
   // 1b. Push presentations (separate file, same delta logic)
   await syncDecksToRepo(gh.token, gh.login, repo, getDeckStoreState(), onProgress);
+
+  // 1c. Push courses (separate file)
+  await syncCoursesToRepo(gh.token, gh.login, repo, courseOps.getAll(), onProgress);
 
   // 2. Pull — fetch remote snapshot and merge missing items into local state
   onProgress?.("Pulling remote changes…");
@@ -59,6 +63,16 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
   if (remoteDecks) {
     importDecksFromGitHub({ decks: remoteDecks.decks, collections: remoteDecks.collections });
     onProgress?.("Presentations merged.");
+  }
+
+  // 2c. Pull courses and merge (additive by id)
+  const remoteCourses = await importCoursesFromRepo(gh.token, gh.login, repo);
+  if (remoteCourses?.courses.length) {
+    const localIds = new Set(courseOps.getAll().map((c) => c.id));
+    for (const course of remoteCourses.courses) {
+      if (!localIds.has(course.id)) courseOps.add(course);
+    }
+    onProgress?.("Courses merged.");
   }
 
   setGithub({ lastSync: Date.now() });

@@ -13,8 +13,6 @@ import {
 import { aiKeys, useAppData, setPuterApiToken } from "@/lib/store";
 import { PROVIDER_PRESETS } from "@/lib/providers";
 import type { AiRole, ProviderId } from "@/lib/types";
-import { githubSync, type SyncConfig } from "@/lib/gistSync";
-import { Github } from "lucide-react";
 
 const PROVIDER_IDS = Object.keys(PROVIDER_PRESETS) as ProviderId[];
 
@@ -168,162 +166,6 @@ function PuterSection() {
   );
 }
 
-function GitHubSyncSection() {
-  const [cfg, setCfg] = useState<SyncConfig | null>(() => githubSync.getConfig());
-  const [token, setToken] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
-
-  function flash(text: string, ok = true) {
-    setMsg({ text, ok });
-    setTimeout(() => setMsg(null), 4000);
-  }
-
-  async function handleConnect() {
-    if (!token.trim()) return;
-    setBusy(true);
-    try {
-      const newCfg = await githubSync.configure(token.trim());
-      setCfg(newCfg);
-      setToken("");
-      flash("Connected! Your data has been pushed to a private GitHub Gist.");
-    } catch (e) {
-      flash(e instanceof Error ? e.message : String(e), false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handlePush() {
-    setBusy(true);
-    try {
-      await githubSync.push();
-      setCfg(githubSync.getConfig());
-      flash("Data pushed to GitHub Gist.");
-    } catch (e) {
-      flash(e instanceof Error ? e.message : String(e), false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handlePull() {
-    setBusy(true);
-    try {
-      await githubSync.pull();
-      flash("Data pulled from GitHub Gist. Reloading…");
-      setTimeout(() => window.location.reload(), 1500);
-    } catch (e) {
-      flash(e instanceof Error ? e.message : String(e), false);
-      setBusy(false);
-    }
-  }
-
-  function handleDisconnect() {
-    githubSync.clear();
-    setCfg(null);
-    flash("GitHub sync disconnected.");
-  }
-
-  return (
-    <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
-      <div className="flex items-center gap-3">
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-700/60 text-slate-300">
-          <Github className="h-4 w-4" />
-        </span>
-        <h2 className="font-semibold text-white">GitHub Gist Sync</h2>
-      </div>
-      <p className="mt-2 text-sm text-slate-400">
-        Sync all your KnowHub data (notes, courses, quizzes) to a private GitHub Gist so it's
-        available across all your devices and browsers.
-      </p>
-
-      {msg && (
-        <div className={`mt-3 rounded-lg px-4 py-2 text-sm font-medium ${msg.ok ? "bg-green-900/50 text-green-300 border border-green-700" : "bg-red-900/50 text-red-300 border border-red-700"}`}>
-          {msg.text}
-        </div>
-      )}
-
-      {!cfg ? (
-        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-white/10 bg-slate-900/40 p-4">
-          <p className="text-sm text-slate-300 font-medium">Connect your GitHub account</p>
-          <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside">
-            <li>Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)</li>
-            <li>Generate a token with the <code className="bg-slate-700 px-1 rounded">gist</code> scope</li>
-            <li>Paste it below</li>
-          </ol>
-          <div className="flex gap-2">
-            <input
-              type="password"
-              placeholder="ghp_xxxxxxxxxxxx"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleConnect(); }}
-              className="flex-1 rounded-lg border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-brand-500 transition-colors"
-            />
-            <button
-              onClick={handleConnect}
-              disabled={busy || !token.trim()}
-              className="rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 transition-colors inline-flex items-center gap-1.5"
-            >
-              {busy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
-              Connect
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-white/10 bg-slate-900/40 p-4">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-            <span className="text-sm text-emerald-400 font-medium">Connected to GitHub Gist</span>
-          </div>
-          <p className="text-xs text-slate-400">
-            Gist ID: <code className="bg-slate-700 px-1 rounded">{cfg.gistId}</code>
-          </p>
-          {cfg.lastPushedAt && (
-            <p className="text-xs text-slate-500">
-              Last pushed: {new Date(cfg.lastPushedAt).toLocaleString()}
-            </p>
-          )}
-          {cfg.lastPulledAt && (
-            <p className="text-xs text-slate-500">
-              Last pulled: {new Date(cfg.lastPulledAt).toLocaleString()}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2 mt-1">
-            <button
-              onClick={handlePush}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 transition-colors"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
-              Push (save to GitHub)
-            </button>
-            <button
-              onClick={handlePull}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-slate-200 text-sm font-semibold px-4 py-2 transition-colors"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
-              Pull (restore from GitHub)
-            </button>
-            <button
-              onClick={handleDisconnect}
-              disabled={busy}
-              className="rounded-lg border border-white/15 bg-white/5 hover:bg-red-900/40 disabled:opacity-50 text-red-400 hover:text-red-300 text-sm font-semibold px-4 py-2 transition-colors"
-            >
-              Disconnect
-            </button>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            <strong>Push</strong> saves your current data to GitHub. <strong>Pull</strong> replaces your current data with what's on GitHub (useful when switching devices).
-          </p>
-        </div>
-      )}
-    </section>
-  );
-}
-
 export default function SettingsPage() {
   const data = useAppData();
   const [provider, setProvider] = useState<ProviderId>("gemini");
@@ -369,8 +211,6 @@ export default function SettingsPage() {
           <p className="text-sm text-slate-400">Manage your AI provider keys.</p>
         </div>
       </div>
-
-      <GitHubSyncSection />
 
       <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <h2 className="flex items-center gap-2 font-semibold text-white">
