@@ -479,6 +479,101 @@ export async function syncDecksToRepo(
 }
 
 // ---------------------------------------------------------------------------
+// Template store sync — PPTX files stored as release assets, metadata in
+// knowhub-templates.json (mirrors the deckStore pattern for large binaries)
+// ---------------------------------------------------------------------------
+
+import type { PptTemplate } from "./types";
+
+export interface TemplatesExport {
+  version: 1;
+  exportedAt: string;
+  /** Metadata rows — fileB64 is omitted; assetId + browser_download_url are stored instead. */
+  templates: Array<Omit<PptTemplate, "fileB64"> & { assetId: number; downloadUrl: string }>;
+}
+
+/**
+ * Push templates to GitHub:
+ * - Each PPTX is uploaded as a release asset (deduplicated by filename).
+ * - A knowhub-templates.json manifest is written to the repo with metadata.
+ */
+export async function syncTemplatesToRepo(
+  token: string,
+  owner: string,
+  repo: string,
+  allTemplates: PptTemplate[],
+  onProgress?: (msg: string) => void
+): Promise<void> {
+  if (!allTemplates.length) return;
+
+  onProgress?.("Pushing templates…");
+  const hashes = loadHashes();
+  const exported: TemplatesExport["templates"] = [];
+
+  for (const tpl of allTemplates) {
+    const filename = `template-${tpl.id}.pptx`;
+    // Convert base64 → ArrayBuffer for upload
+    const binary = Uint8Array.from(atob(tpl.fileB64), (c) => c.charCodeAt(0));
+    const asset = await uploadReleaseAsset(
+      token, owner, repo, filename, binary.buffer as ArrayBuffer,
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    );
+    exported.push({
+      id: tpl.id,
+      name: tpl.name,
+      backgroundColor: tpl.backgroundColor,
+      accentColor: tpl.accentColor,
+      createdAt: tpl.createdAt,
+      assetId: asset.id,
+      downloadUrl: asset.browser_download_url,
+    });
+  }
+
+  const manifestJson = JSON.stringify(
+    { version: 1, exportedAt: new Date().toISOString(), templates: exported } satisfies TemplatesExport,
+    null, 2
+  );
+  const path = "knowhub-templates.json";
+  const h = quickHash(manifestJson);
+  if (hashes[path] !== h) {
+    await putFile(token, owner, repo, path, manifestJson, `knowhub: sync templates ${new Date().toISOString()}`);
+    hashes[path] = h;
+    saveHashes(hashes);
+  }
+}
+
+/**
+ * Pull templates from GitHub:
+ * - Reads the manifest, downloads each PPTX asset, reconstructs PptTemplate with fileB64.
+ */
+export async function importTemplatesFromRepo(
+  token: string,
+  owner: string,
+  repo: string
+): Promise<PptTemplate[] | null> {
+  const text = await getFileText(token, owner, repo, "knowhub-templates.json");
+  if (!text) return null;
+  let manifest: TemplatesExport;
+  try {
+    manifest = JSON.parse(text) as TemplatesExport;
+    if (manifest.version !== 1) return null;
+  } catch { return null; }
+
+  const result: PptTemplate[] = [];
+  for (const tpl of manifest.templates) {
+    // Download the PPTX binary from the release asset
+    const buffer = await downloadReleaseAsset(token, owner, repo, tpl.assetId);
+    // Convert ArrayBuffer → base64
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    const fileB64 = btoa(binary);
+    result.push({ id: tpl.id, name: tpl.name, fileB64, backgroundColor: tpl.backgroundColor, accentColor: tpl.accentColor, createdAt: tpl.createdAt });
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Course store sync — stored in knowhub-courses.json
 // ---------------------------------------------------------------------------
 

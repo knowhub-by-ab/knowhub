@@ -1,7 +1,8 @@
-import { ensureRepo, importFromRepo, syncToRepo, syncDecksToRepo, importDecksFromRepoFile, syncCoursesToRepo, importCoursesFromRepo } from "./github";
+import { ensureRepo, importFromRepo, syncToRepo, syncDecksToRepo, importDecksFromRepoFile, syncCoursesToRepo, importCoursesFromRepo, syncTemplatesToRepo, importTemplatesFromRepo } from "./github";
 import { getState, replaceAll, setGithub } from "./store";
 import { getDeckStoreState, importDecksFromGitHub } from "./deckStore";
 import { courseOps } from "./courseStore";
+import { templates } from "./templateStore";
 
 // Shared "sync to GitHub now" action used by the Repository page and the global
 // top-bar Sync button. Bidirectional: push local changes first (delta), then
@@ -24,6 +25,9 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
 
   // 1c. Push courses (separate file)
   await syncCoursesToRepo(gh.token, gh.login, repo, courseOps.getAll(), onProgress);
+
+  // 1d. Push templates (PPTX files → release assets + manifest)
+  await syncTemplatesToRepo(gh.token, gh.login, repo, templates.getAll(), onProgress);
 
   // 2. Pull — fetch remote snapshot and merge missing items into local state
   onProgress?.("Pulling remote changes…");
@@ -73,6 +77,16 @@ export async function syncGithubNow(onProgress?: (msg: string) => void): Promise
       if (!localIds.has(course.id)) courseOps.add(course);
     }
     onProgress?.("Courses merged.");
+  }
+
+  // 2d. Pull templates and merge (additive by id)
+  const remoteTemplates = await importTemplatesFromRepo(gh.token, gh.login, repo);
+  if (remoteTemplates?.length) {
+    const localIds = new Set(templates.getAll().map((t) => t.id));
+    for (const tpl of remoteTemplates) {
+      if (!localIds.has(tpl.id)) templates.add(tpl.name, tpl.fileB64, { backgroundColor: tpl.backgroundColor, accentColor: tpl.accentColor });
+    }
+    onProgress?.("Templates merged.");
   }
 
   setGithub({ lastSync: Date.now() });
