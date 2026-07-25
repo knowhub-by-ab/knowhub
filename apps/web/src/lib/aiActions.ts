@@ -463,22 +463,28 @@ export async function proposeTreeImprovements(
         if (inSubtree && depth > rootDepth) inRoot.add(node.id);
         else if (inSubtree && depth <= rootDepth) inSubtree = false;
       }
-      // When startNodeId is set, use its PARENT as the scope boundary so the AI
-      // sees all siblings (A, B, C … L) rather than just the selected leaf's subtree.
+      // When startNodeId is set:
+      // - If the start node HAS children → scope to its PARENT so the AI sees all siblings
+      // - If the start node has NO children (it's a leaf) → scope to the start node itself
+      //   so the AI populates it with sub-topics
       if (scope.startNodeId && inRoot.has(scope.startNodeId)) {
+        const startNodeHasChildren = nodes.some((n) => n.parentId === scope.startNodeId);
         const startNode = nodes.find((n) => n.id === scope.startNodeId);
-        const scopeParentId = startNode?.parentId ?? scope.startNodeId;
-        const parentEntry = allFlat.find((e) => e.node.id === scopeParentId);
-        if (parentEntry) {
-          const parentDepth = parentEntry.depth;
-          const inParent = new Set<string>();
+        // Leaf → populate the node itself; non-leaf → show sibling context via parent
+        const scopeAnchorId = startNodeHasChildren
+          ? (startNode?.parentId ?? scope.startNodeId)
+          : scope.startNodeId;
+        const anchorEntry = allFlat.find((e) => e.node.id === scopeAnchorId);
+        if (anchorEntry) {
+          const anchorDepth = anchorEntry.depth;
+          const inAnchor = new Set<string>();
           let inSub = false;
           for (const { node, depth } of allFlat) {
-            if (node.id === scopeParentId) { inParent.add(node.id); inSub = true; continue; }
-            if (inSub && depth > parentDepth) inParent.add(node.id);
-            else if (inSub && depth <= parentDepth) inSub = false;
+            if (node.id === scopeAnchorId) { inAnchor.add(node.id); inSub = true; continue; }
+            if (inSub && depth > anchorDepth) inAnchor.add(node.id);
+            else if (inSub && depth <= anchorDepth) inSub = false;
           }
-          inRoot.forEach((id) => { if (!inParent.has(id)) inRoot.delete(id); });
+          inRoot.forEach((id) => { if (!inAnchor.has(id)) inRoot.delete(id); });
         }
       }
       // Apply depth ceiling from end node if specified
@@ -497,10 +503,16 @@ export async function proposeTreeImprovements(
   const allFlat2 = tree.flatten(nodes);
   let focusLabel = topic;
   if (scope?.startNodeId) {
-    // Use start node's PARENT as the focus label (that's the scope boundary we use)
     const startNode2 = nodes.find((n) => n.id === scope.startNodeId);
-    const parentNode2 = startNode2?.parentId ? nodes.find((n) => n.id === startNode2.parentId) : null;
-    focusLabel = parentNode2?.title ?? startNode2?.title ?? topic;
+    const startHasChildren2 = nodes.some((n) => n.parentId === scope.startNodeId);
+    if (startHasChildren2) {
+      // Non-leaf: focus label is the parent (sibling context)
+      const parentNode2 = startNode2?.parentId ? nodes.find((n) => n.id === startNode2.parentId) : null;
+      focusLabel = parentNode2?.title ?? startNode2?.title ?? topic;
+    } else {
+      // Leaf: focus label is the node itself (we're populating it)
+      focusLabel = startNode2?.title ?? topic;
+    }
   }
 
   // The scoped outline (with node IDs for parentId references)
@@ -536,9 +548,14 @@ export async function proposeTreeImprovements(
     return `Scope: ${pathParts.join(" → ")}`;
   })();
 
-  // The scope root is startNode's parent (since we scope to siblings), or startNodeId if no parent
+  // The scope root: for leaf start nodes = the node itself; for non-leaf = its parent
   const startNodeForScope = scope?.startNodeId ? nodes.find((n) => n.id === scope.startNodeId) : null;
-  const scopeRootId = startNodeForScope?.parentId ?? scope?.startNodeId ?? scope?.rootId ?? null;
+  const startHasChildrenForScope = scope?.startNodeId
+    ? nodes.some((n) => n.parentId === scope.startNodeId)
+    : false;
+  const scopeRootId = startNodeForScope
+    ? (startHasChildrenForScope ? (startNodeForScope.parentId ?? startNodeForScope.id) : startNodeForScope.id)
+    : (scope?.rootId ?? null);
   const scopeRootTitle = scopeRootId
     ? (nodes.find((n) => n.id === scopeRootId)?.title ?? focusLabel)
     : focusLabel;
