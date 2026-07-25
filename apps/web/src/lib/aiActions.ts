@@ -504,19 +504,18 @@ export async function proposeTreeImprovements(
   }
 
   // The scoped outline (with node IDs for parentId references)
-  const outline = (scopedNodes.length
+  const outline = scopedNodes.length
     ? tree
         .flatten(scopedNodes)
         .map(({ node, depth }) => `${"  ".repeat(depth)}- [${node.id}] ${node.title}`)
         .join("\n")
-    : "(empty tree)").slice(0, 3000);
+    : "(empty tree)";
 
   // The full tree — titles only, no IDs — so the AI can avoid duplicating
   // topics that already exist outside the scoped area
   const fullTreeTitles = allFlat2
     .map(({ node }) => node.title)
-    .join(", ")
-    .slice(0, 2000);
+    .join(", ");
 
   // Build breadcrumb so the AI knows exactly where in the tree the scope sits
   const scopeContext = (() => {

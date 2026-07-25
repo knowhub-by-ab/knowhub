@@ -61,7 +61,7 @@ const PROVIDER_DEFAULTS: Record<
   },
   OPENROUTER_API_KEY: {
     baseUrl: "https://openrouter.ai/api/v1",
-    model: "meta-llama/llama-3.3-70b-instruct:free",
+    model: "openrouter/auto",
     kind: "openai",
   },
   OPENAI_API_KEY: {
@@ -140,6 +140,32 @@ function json(body: unknown, status: number, headers: Record<string, string>) {
 }
 
 const RETRYABLE = [401, 403, 408, 409, 429, 500, 502, 503, 504];
+
+// When an OpenRouter model is unavailable, automatically try these in order.
+// `openrouter/auto` lets OpenRouter pick the best currently-available model.
+const OPENROUTER_FALLBACK_MODELS = [
+  "openrouter/auto",
+  "meta-llama/llama-3.1-8b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+  "google/gemma-2-9b-it:free",
+];
+
+function isOpenRouter(up: Upstream): boolean {
+  return up.baseUrl.includes("openrouter.ai");
+}
+
+/** Returns true when the error body indicates the specific model is unavailable. */
+function isModelUnavailable(status: number, errorText: string): boolean {
+  if (status === 404) return true;
+  const lower = errorText.toLowerCase();
+  return (
+    lower.includes("unavailable for free") ||
+    lower.includes("model is unavailable") ||
+    lower.includes("model not found") ||
+    lower.includes("no endpoints") ||
+    lower.includes("use this slug instead")
+  );
+}
 
 /** Flatten an OpenAI-style conversation into a single prompt for non-chat APIs. */
 function flatten(messages: ChatMessage[]): string {
@@ -248,64 +274,89 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const model = payload.model && payload.model !== "auto" ? payload.model : "auto";
   const errors: string[] = [];
 
+  // Try an upstream, automatically falling back through OPENROUTER_FALLBACK_MODELS
+  // when OpenRouter returns a model-unavailable error.
+  async function tryUpstream(
+    up: Upstream,
+    stream: boolean
+  ): Promise<
+    | { ok: true; response: Response }
+    | { ok: true; content: string }
+    | { ok: false; error: string }
+  > {
+    const modelsToTry = isOpenRouter(up)
+      ? [model !== "auto" ? model : up.model, ...OPENROUTER_FALLBACK_MODELS.filter((m) => m !== up.model)]
+      : [model !== "auto" ? model : up.model];
+
+    for (const tryModel of modelsToTry) {
+      try {
+        if (up.kind === "apifreellm") {
+          const r = await callApiFreeLlm(up, messages);
+          if (r.status === 200 && r.content) return { ok: true, content: r.content };
+          return { ok: false, error: `${r.status}${r.error ? " " + r.error : ""}` };
+        }
+
+        if (stream) {
+          const res = await fetch(`${up.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${up.apiKey}` },
+            body: JSON.stringify({ model: tryModel, messages, stream: true }),
+          });
+          if (!res.ok || !res.body) {
+            const t = await res.text().catch(() => "");
+            if (isOpenRouter(up) && isModelUnavailable(res.status, t)) continue; // try next model
+            return { ok: false, error: `${res.status} ${t.slice(0, 100)}` };
+          }
+          return { ok: true, response: res };
+        } else {
+          const r = await callOpenAI({ ...up, model: tryModel }, messages, "auto");
+          if (r.status === 200 && r.content) return { ok: true, content: r.content };
+          if (isOpenRouter(up) && isModelUnavailable(r.status, r.error ?? "")) continue; // try next model
+          return { ok: false, error: `${r.status}${r.error ? " " + r.error : ""}` };
+        }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : "network error" };
+      }
+    }
+    return { ok: false, error: "all OpenRouter fallback models unavailable" };
+  }
+
+  type UpstreamResult =
+    | { ok: true; response: Response }
+    | { ok: true; content: string }
+    | { ok: false; error: string };
+
   // Streaming: pass the upstream's SSE straight through to the client. We fall
   // back across providers on an initial non-OK status (not mid-stream).
   if (payload.stream) {
     for (const up of upstreams) {
-      try {
-        if (up.kind === "apifreellm") {
-          // Not streamable — return the whole answer as JSON; client handles it.
-          const r = await callApiFreeLlm(up, messages);
-          if (r.status === 200 && r.content)
-            return json({ content: r.content, provider: up.name, model: up.model }, 200, ch);
-          errors.push(`${up.name}: ${r.status}${r.error ? " " + r.error : ""}`);
-          continue;
-        }
-        const res = await fetch(`${up.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${up.apiKey}` },
-          body: JSON.stringify({ model: model !== "auto" ? model : up.model, messages, stream: true }),
-        });
-        if (!res.ok || !res.body) {
-          const t = await res.text().catch(() => "");
-          errors.push(`${up.name}: ${res.status} ${t.slice(0, 100)}`);
-          continue;
-        }
-        return new Response(res.body, {
-          status: 200,
-          headers: {
-            ...ch,
-            "Content-Type": "text/event-stream; charset=utf-8",
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-          },
-        });
-      } catch (err) {
-        errors.push(`${up.name}: ${err instanceof Error ? err.message : "network error"}`);
-        continue;
+      let result: UpstreamResult;
+      try { result = await tryUpstream(up, true); }
+      catch (err) { errors.push(`${up.name}: ${err instanceof Error ? err.message : "network error"}`); continue; }
+      if (!result.ok) { errors.push(`${up.name}: ${result.error}`); continue; }
+      if ("content" in result) {
+        return json({ content: result.content, provider: up.name, model: up.model }, 200, ch);
       }
+      return new Response(result.response.body, {
+        status: 200,
+        headers: {
+          ...ch,
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache",
+          "X-Accel-Buffering": "no",
+        },
+      });
     }
     return json({ error: `All providers failed. ${errors.join(" | ")}` }, 502, ch);
   }
 
   for (const up of upstreams) {
-    try {
-      const r =
-        up.kind === "apifreellm"
-          ? await callApiFreeLlm(up, messages)
-          : await callOpenAI(up, messages, model);
-
-      if (r.status === 200 && r.content) {
-        return json({ content: r.content, provider: up.name, model: up.model }, 200, ch);
-      }
-      errors.push(`${up.name}: ${r.status}${r.error ? " " + r.error : r.content ? " empty" : ""}`);
-      if (r.status === 200) continue; // empty response → try next
-      if (RETRYABLE.includes(r.status)) continue;
-      // Non-retryable 4xx won't be fixed by another provider of the same kind.
-      continue;
-    } catch (err) {
-      errors.push(`${up.name}: ${err instanceof Error ? err.message : "network error"}`);
-      continue;
+    let result: UpstreamResult;
+    try { result = await tryUpstream(up, false); }
+    catch (err) { errors.push(`${up.name}: ${err instanceof Error ? err.message : "network error"}`); continue; }
+    if (!result.ok) { errors.push(`${up.name}: ${result.error}`); continue; }
+    if ("content" in result) {
+      return json({ content: result.content, provider: up.name, model: up.model }, 200, ch);
     }
   }
 
