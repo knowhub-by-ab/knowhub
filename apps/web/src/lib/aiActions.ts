@@ -489,6 +489,14 @@ export async function proposeTreeImprovements(
     }
   }
 
+  // Build human-readable path for the focused scope (start node → root)
+  const allFlat2 = tree.flatten(nodes);
+  let focusLabel = topic;
+  if (scope?.startNodeId) {
+    const startEntry2 = allFlat2.find((e) => e.node.id === scope.startNodeId);
+    if (startEntry2) focusLabel = startEntry2.node.title;
+  }
+
   const outline = scopedNodes.length
     ? tree
         .flatten(scopedNodes)
@@ -496,18 +504,39 @@ export async function proposeTreeImprovements(
         .join("\n")
     : "(empty tree)";
 
+  // Build a breadcrumb path so the AI knows where in the overall tree we are
+  const scopeContext = scope?.startNodeId
+    ? (() => {
+        const entry = allFlat2.find((e) => e.node.id === scope.startNodeId);
+        if (!entry) return "";
+        // Walk up to build path
+        const pathParts: string[] = [entry.node.title];
+        let current = entry.node;
+        while (current.parentId) {
+          const parent = nodes.find((n) => n.id === current.parentId);
+          if (!parent) break;
+          pathParts.unshift(parent.title);
+          current = parent;
+        }
+        return `Focused scope: ${pathParts.join(" → ")}`;
+      })()
+    : `Focused scope: ${topic} (entire tree)`;
+
   const messages: ChatMessage[] = [
     {
       role: "system",
       content:
         "You edit a learner's topic tree. Output ONLY JSON of this shape: " +
         '{"additions":[{"parentId": string|null, "title": string, "children"?: [{"title": string}]}]}. ' +
-        "Add ONLY topics that are currently missing but important for learning this subject. " +
-        "Do NOT recreate existing topics. parentId must be an existing [id] or null.",
+        "CRITICAL RULES: " +
+        "1. Only suggest topics that are DIRECTLY and SPECIFICALLY relevant to the focused scope shown by the user — do NOT suggest generic career, soft-skill, or unrelated topics unless the scope itself is about those. " +
+        "2. Do NOT recreate or paraphrase topics that already exist in the tree. " +
+        "3. parentId MUST be one of the existing [id] values shown in the tree, or null only if the topic belongs at the very top level of the scoped subtree. " +
+        "4. Every suggestion must fit naturally as a child or sibling of the nodes shown.",
     },
     {
       role: "user",
-      content: `Subject: "${topic}"\n\nExisting tree:\n${outline}\n\nPropose missing important topics to add.`,
+      content: `${scopeContext}\n\nExisting nodes in scope:\n${outline}\n\nPropose ONLY topics that are missing from the "${focusLabel}" section specifically. Stay strictly within this scope.`,
     },
   ];
 

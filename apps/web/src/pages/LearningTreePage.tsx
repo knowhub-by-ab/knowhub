@@ -571,7 +571,8 @@ export default function LearningTreePage() {
                 setGenLoading(true);
                 try {
                   const rootNode = data.nodes.find((n) => n.id === improveRootId);
-                  const topic = rootNode?.title ?? "my learning tree";
+                  const startNode = improveStartId ? data.nodes.find((n) => n.id === improveStartId) : null;
+                  const topic = startNode?.title ?? rootNode?.title ?? "my learning tree";
                   const scope: TreeImproveScope = {
                     rootId: improveRootId,
                     startNodeId: improveStartId || undefined,
@@ -643,8 +644,12 @@ export default function LearningTreePage() {
                       <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${pChecked ? "border-brand-400 bg-brand-500 text-white" : "border-slate-600"}`}>
                         {pChecked ? "✓" : ""}
                       </span>
-                      <span className="font-medium">{p.title}</span>
-                      {p.parentTitle && <span className="ml-1 text-slate-500 font-normal">under {p.parentTitle}</span>}
+                      <span className="flex flex-col gap-0.5 min-w-0">
+                        <span className="font-medium leading-snug">{p.title}</span>
+                        <span className={`text-[10px] ${pChecked ? "text-brand-300/70" : "text-slate-500"}`}>
+                          📍 {p.parentTitle ? `under "${p.parentTitle}"` : "top level"}
+                        </span>
+                      </span>
                     </button>
                     {/* Child rows — always visible */}
                     {p.children.map((child, j) => {
