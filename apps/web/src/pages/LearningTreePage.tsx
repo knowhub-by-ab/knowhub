@@ -295,7 +295,8 @@ export default function LearningTreePage() {
   const [genLoading, setGenLoading] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [proposals, setProposals] = useState<TreeProposal[] | null>(null);
-  const [accepted, setAccepted] = useState<Set<number>>(new Set());
+  // Keys: "i" = top-level proposal i, "i:j" = child j of proposal i
+  const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const [syllabusMode, setSyllabusMode] = useState(false);
   const [syllabusText, setSyllabusText] = useState("");
   const [syllabusLoading, setSyllabusLoading] = useState(false);
@@ -336,7 +337,8 @@ export default function LearningTreePage() {
         p = await proposeTreeChanges(data.aiKeys, topic, data.nodes);
       }
       setProposals(p);
-      setAccepted(new Set(p.map((_, i) => i)));
+      const allKeys = new Set<string>(); p.forEach((q, i) => { allKeys.add(String(i)); q.children.forEach((_, j) => allKeys.add(`${i}:${j}`)); });
+      setAccepted(allKeys);
       setGenTopic("");
     } catch (err) {
       setGenError(err instanceof Error ? err.message : "Generation failed.");
@@ -392,7 +394,8 @@ export default function LearningTreePage() {
       const instruction = `Generate a comprehensive learning tree based on this syllabus/curriculum:\n\n${syllabusText}\n\nCreate a structured hierarchy of topics and subtopics covering all subjects in this syllabus.`;
       const p = await proposeNewTree(data.aiKeys, instruction, null);
       setProposals(p);
-      setAccepted(new Set(p.map((_, i) => i)));
+      const allKeys2 = new Set<string>(); p.forEach((q, i) => { allKeys2.add(String(i)); q.children.forEach((_, j) => allKeys2.add(`${i}:${j}`)); });
+      setAccepted(allKeys2);
       setSyllabusMode(false);
     } catch (err) {
       setSyllabusError(err instanceof Error ? err.message : "Generation failed.");
@@ -575,9 +578,9 @@ export default function LearningTreePage() {
                     endNodeId: improveEndId || undefined,
                   };
                   const p = await proposeTreeImprovements(data.aiKeys, data.nodes, topic, scope);
-                  const all = new Set(p.map((_, i) => i));
                   setProposals(p);
-                  setAccepted(all);
+                  const allKeys3 = new Set<string>(); p.forEach((q, i) => { allKeys3.add(String(i)); q.children.forEach((_, j) => allKeys3.add(`${i}:${j}`)); });
+                  setAccepted(allKeys3);
                 } catch (err) {
                   setGenError(err instanceof Error ? err.message : "Improve failed.");
                 } finally {
@@ -597,35 +600,92 @@ export default function LearningTreePage() {
           <div className="mt-3 rounded-xl border border-white/10 bg-slate-900/60 p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-200">
-                {proposals.length} suggested addition{proposals.length !== 1 ? "s" : ""} — toggle to accept
+                {proposals.length} suggested addition{proposals.length !== 1 ? "s" : ""} — check each node to accept
               </span>
               <div className="flex gap-2">
-                <button onClick={() => setAccepted(new Set(proposals.map((_, i) => i)))} className="text-xs text-brand-300 hover:underline">All</button>
+                <button
+                  onClick={() => {
+                    const all = new Set<string>();
+                    proposals.forEach((p, i) => { all.add(String(i)); p.children.forEach((_, j) => all.add(`${i}:${j}`)); });
+                    setAccepted(all);
+                  }}
+                  className="text-xs text-brand-300 hover:underline"
+                >All</button>
                 <button onClick={() => setAccepted(new Set())} className="text-xs text-slate-400 hover:underline">None</button>
               </div>
             </div>
-            <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
-              {proposals.map((p, i) => (
-                <button
-                  key={i}
-                  onClick={() => setAccepted((prev) => { const next = new Set(prev); if (next.has(i)) next.delete(i); else next.add(i); return next; })}
-                  className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${accepted.has(i) ? "border-brand-500/50 bg-brand-500/10 text-white" : "border-white/5 bg-slate-800/40 text-slate-400"}`}
-                >
-                  <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${accepted.has(i) ? "border-brand-400 bg-brand-500 text-white" : "border-slate-600"}`}>
-                    {accepted.has(i) ? "✓" : ""}
-                  </span>
-                  <span>
-                    <span className="font-medium">{p.title}</span>
-                    {p.parentTitle && <span className="ml-1 text-slate-500">under {p.parentTitle}</span>}
-                    {p.children.length > 0 && <span className="ml-1 text-slate-500">(+{p.children.length} sub-topics)</span>}
-                  </span>
-                </button>
-              ))}
+            <div className="flex flex-col gap-1 max-h-96 overflow-y-auto pr-1">
+              {proposals.map((p, i) => {
+                const pKey = String(i);
+                const pChecked = accepted.has(pKey);
+                function toggleP() {
+                  setAccepted((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(pKey)) {
+                      next.delete(pKey);
+                      // uncheck all children too
+                      p.children.forEach((_, j) => next.delete(`${i}:${j}`));
+                    } else {
+                      next.add(pKey);
+                      // check all children too
+                      p.children.forEach((_, j) => next.add(`${i}:${j}`));
+                    }
+                    return next;
+                  });
+                }
+                return (
+                  <div key={i}>
+                    {/* Parent row */}
+                    <button
+                      onClick={toggleP}
+                      className={`w-full flex items-start gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${pChecked ? "border-brand-500/50 bg-brand-500/10 text-white" : "border-white/5 bg-slate-800/40 text-slate-400"}`}
+                    >
+                      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${pChecked ? "border-brand-400 bg-brand-500 text-white" : "border-slate-600"}`}>
+                        {pChecked ? "✓" : ""}
+                      </span>
+                      <span className="font-medium">{p.title}</span>
+                      {p.parentTitle && <span className="ml-1 text-slate-500 font-normal">under {p.parentTitle}</span>}
+                    </button>
+                    {/* Child rows — always visible */}
+                    {p.children.map((child, j) => {
+                      const cKey = `${i}:${j}`;
+                      const cChecked = accepted.has(cKey);
+                      return (
+                        <button
+                          key={cKey}
+                          onClick={() => setAccepted((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(cKey)) {
+                              next.delete(cKey);
+                            } else {
+                              next.add(cKey);
+                              next.add(pKey); // auto-check parent if a child is checked
+                            }
+                            return next;
+                          })}
+                          className={`w-full flex items-start gap-2 rounded-lg border px-3 py-1.5 text-left text-xs transition-colors ml-5 mt-0.5 ${cChecked ? "border-brand-500/30 bg-brand-500/5 text-slate-200" : "border-white/5 bg-slate-800/20 text-slate-500"}`}
+                        >
+                          <span className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[9px] ${cChecked ? "border-brand-400 bg-brand-500 text-white" : "border-slate-600"}`}>
+                            {cChecked ? "✓" : ""}
+                          </span>
+                          <span>{child}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() => {
-                  const toApply = proposals.filter((_, i) => accepted.has(i));
+                  // Build filtered proposals — only accepted parents, only accepted children
+                  const toApply = proposals
+                    .map((p, i) => {
+                      if (!accepted.has(String(i))) return null;
+                      return { ...p, children: p.children.filter((_, j) => accepted.has(`${i}:${j}`)) };
+                    })
+                    .filter(Boolean) as TreeProposal[];
                   if (toApply.length) applyTreeProposals(toApply);
                   setProposals(null);
                   setAccepted(new Set());
@@ -633,7 +693,7 @@ export default function LearningTreePage() {
                 disabled={accepted.size === 0}
                 className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-40"
               >
-                Add {accepted.size} selected
+                Add {[...accepted].filter(k => !k.includes(":")).length} topic{[...accepted].filter(k => !k.includes(":")).length !== 1 ? "s" : ""} + {[...accepted].filter(k => k.includes(":")).length} sub-topic{[...accepted].filter(k => k.includes(":")).length !== 1 ? "s" : ""}
               </button>
               <button
                 onClick={() => { setProposals(null); setAccepted(new Set()); }}
