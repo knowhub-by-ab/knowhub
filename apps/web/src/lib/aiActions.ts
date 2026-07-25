@@ -463,20 +463,22 @@ export async function proposeTreeImprovements(
         if (inSubtree && depth > rootDepth) inRoot.add(node.id);
         else if (inSubtree && depth <= rootDepth) inSubtree = false;
       }
-      // Further narrow to start node subtree if specified
+      // When startNodeId is set, use its PARENT as the scope boundary so the AI
+      // sees all siblings (A, B, C … L) rather than just the selected leaf's subtree.
       if (scope.startNodeId && inRoot.has(scope.startNodeId)) {
-        const startEntry = allFlat.find((e) => e.node.id === scope.startNodeId);
-        if (startEntry) {
-          const startDepth = startEntry.depth;
-          const inStart = new Set<string>();
+        const startNode = nodes.find((n) => n.id === scope.startNodeId);
+        const scopeParentId = startNode?.parentId ?? scope.startNodeId;
+        const parentEntry = allFlat.find((e) => e.node.id === scopeParentId);
+        if (parentEntry) {
+          const parentDepth = parentEntry.depth;
+          const inParent = new Set<string>();
           let inSub = false;
           for (const { node, depth } of allFlat) {
-            if (node.id === scope.startNodeId) { inStart.add(node.id); inSub = true; continue; }
-            if (inSub && depth > startDepth) inStart.add(node.id);
-            else if (inSub && depth <= startDepth) inSub = false;
+            if (node.id === scopeParentId) { inParent.add(node.id); inSub = true; continue; }
+            if (inSub && depth > parentDepth) inParent.add(node.id);
+            else if (inSub && depth <= parentDepth) inSub = false;
           }
-          inRoot.forEach((id) => { if (!inStart.has(id)) inRoot.delete(id); });
-          inRoot.add(scope.startNodeId);
+          inRoot.forEach((id) => { if (!inParent.has(id)) inRoot.delete(id); });
         }
       }
       // Apply depth ceiling from end node if specified
@@ -495,29 +497,34 @@ export async function proposeTreeImprovements(
   const allFlat2 = tree.flatten(nodes);
   let focusLabel = topic;
   if (scope?.startNodeId) {
-    const startEntry2 = allFlat2.find((e) => e.node.id === scope.startNodeId);
-    if (startEntry2) focusLabel = startEntry2.node.title;
+    // Use start node's PARENT as the focus label (that's the scope boundary we use)
+    const startNode2 = nodes.find((n) => n.id === scope.startNodeId);
+    const parentNode2 = startNode2?.parentId ? nodes.find((n) => n.id === startNode2.parentId) : null;
+    focusLabel = parentNode2?.title ?? startNode2?.title ?? topic;
   }
 
   // The scoped outline (with node IDs for parentId references)
-  const outline = scopedNodes.length
+  const outline = (scopedNodes.length
     ? tree
         .flatten(scopedNodes)
         .map(({ node, depth }) => `${"  ".repeat(depth)}- [${node.id}] ${node.title}`)
         .join("\n")
-    : "(empty tree)";
+    : "(empty tree)").slice(0, 3000);
 
   // The full tree — titles only, no IDs — so the AI can avoid duplicating
   // topics that already exist outside the scoped area
   const fullTreeTitles = allFlat2
     .map(({ node }) => node.title)
-    .join(", ");
+    .join(", ")
+    .slice(0, 2000);
 
   // Build breadcrumb so the AI knows exactly where in the tree the scope sits
   const scopeContext = (() => {
-    const startId = scope?.startNodeId;
-    if (!startId) return `Scope: entire tree for "${topic}"`;
-    const entry = allFlat2.find((e) => e.node.id === startId);
+    // Walk up from startNode's parent (the actual scope root)
+    const startNode3 = scope?.startNodeId ? nodes.find((n) => n.id === scope.startNodeId) : null;
+    const scopeAnchorId = startNode3?.parentId ?? scope?.startNodeId ?? scope?.rootId;
+    if (!scopeAnchorId) return `Scope: entire tree for "${topic}"`;
+    const entry = allFlat2.find((e) => e.node.id === scopeAnchorId);
     if (!entry) return `Scope: "${topic}"`;
     const pathParts: string[] = [entry.node.title];
     let current = entry.node;
@@ -530,8 +537,9 @@ export async function proposeTreeImprovements(
     return `Scope: ${pathParts.join(" → ")}`;
   })();
 
-  // The scope root is the node whose ID we treat as "top level" for null parentId
-  const scopeRootId = scope?.startNodeId ?? scope?.rootId ?? null;
+  // The scope root is startNode's parent (since we scope to siblings), or startNodeId if no parent
+  const startNodeForScope = scope?.startNodeId ? nodes.find((n) => n.id === scope.startNodeId) : null;
+  const scopeRootId = startNodeForScope?.parentId ?? scope?.startNodeId ?? scope?.rootId ?? null;
   const scopeRootTitle = scopeRootId
     ? (nodes.find((n) => n.id === scopeRootId)?.title ?? focusLabel)
     : focusLabel;
