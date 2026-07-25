@@ -17,6 +17,7 @@ import {
   IndentDecrease,
   FileText,
   Upload,
+  Download,
 } from "lucide-react";
 import { tree, useAppData } from "@/lib/store";
 import CascadingNodePicker from "@/components/CascadingNodePicker";
@@ -312,6 +313,39 @@ export default function LearningTreePage() {
   const [improveStartId, setImproveStartId] = useState<string>("");
   const [improveEndId, setImproveEndId] = useState<string>("");
 
+  function downloadTreeJson(rootId: string) {
+    const rootNode = data.nodes.find((n) => n.id === rootId);
+    if (!rootNode) return;
+
+    // Collect all descendants of rootId (breadth-first)
+    const included = new Set<string>([rootId]);
+    const queue = [rootId];
+    while (queue.length) {
+      const pid = queue.shift()!;
+      for (const n of data.nodes) {
+        if (n.parentId === pid) { included.add(n.id); queue.push(n.id); }
+      }
+    }
+    const subset = data.nodes.filter((n) => included.has(n.id));
+
+    // Build nested tree structure for readability
+    function buildNested(parentId: string | null): object[] {
+      return subset
+        .filter((n) => n.parentId === parentId)
+        .sort((a, b) => a.order - b.order)
+        .map((n) => ({ id: n.id, title: n.title, status: n.status, children: buildNested(n.id) }));
+    }
+
+    const payload = { exportedAt: new Date().toISOString(), tree: buildNested(null) };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${rootNode.title.replace(/[^a-z0-9]+/gi, "_")}_tree.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function addRoot() {
     if (newRoot.trim()) {
       tree.add(newRoot, null);
@@ -593,6 +627,15 @@ export default function LearningTreePage() {
             >
               {genLoading ? "Analysing…" : "Suggest missing topics"}
             </button>
+            {improveRootId && (
+              <button
+                onClick={() => downloadTreeJson(improveRootId)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download tree as JSON
+              </button>
+            )}
           </div>
         )}
 
