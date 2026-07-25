@@ -543,6 +543,25 @@ export async function proposeTreeImprovements(
     ? (nodes.find((n) => n.id === scopeRootId)?.title ?? focusLabel)
     : focusLabel;
 
+  // Detect whether the scope root's direct children use a lettered naming convention
+  // (e.g. "A. Frontend Fundamentals", "B. HTML & CSS") so we can tell the AI to continue it.
+  const scopeRootChildren = scopedNodes.filter((n) => n.parentId === scopeRootId);
+  const letterPattern = /^([A-Z])\. /;
+  const usesLetterPrefix = scopeRootChildren.length > 0 &&
+    scopeRootChildren.every((n) => letterPattern.test(n.title));
+  const lastLetter = usesLetterPrefix
+    ? scopeRootChildren.reduce((acc, n) => {
+        const m = n.title.match(letterPattern);
+        return m ? m[1] : acc;
+      }, "A")
+    : null;
+  const nextLetter = lastLetter ? String.fromCharCode(lastLetter.charCodeAt(0) + 1) : null;
+
+  const namingRule = usesLetterPrefix && nextLetter
+    ? `5. Naming: direct children of "${scopeRootTitle}" use "Letter. Title" format. ` +
+      `Existing children already cover A–${lastLetter}. Any NEW direct children of "${scopeRootTitle}" must use the next letters starting from "${nextLetter}." (e.g. "${nextLetter}. Topic Name"). Sub-topics within an existing lettered node should also start a new letter sequence "A. …" under that parent.`
+    : `5. Match the naming style of existing sibling nodes exactly.`;
+
   const messages: ChatMessage[] = [
     {
       role: "system",
@@ -552,8 +571,11 @@ export async function proposeTreeImprovements(
         "RULES (violating any = bad output): " +
         `1. Suggest ONLY topics specific to the scoped section — not generic topics unrelated to it. ` +
         `2. Do NOT suggest anything already covered in the full tree (listed below). Check carefully before suggesting. ` +
-        `3. parentId must be an [id] from the scoped nodes below. Use null ONLY for direct children of the scope root ("${scopeRootTitle}"). ` +
-        "4. Aim for 3–6 precise, non-overlapping additions.",
+        `3. parentId must be the [id] of the node each suggestion logically belongs under. ` +
+        `   Spread suggestions across multiple parent nodes where it makes sense — do NOT put everything under the scope root. ` +
+        `   Use null ONLY if a suggestion is a direct child of the scope root and no existing node is a better parent. ` +
+        "4. Aim for 4–8 precise, non-overlapping additions spread across different parent nodes. " +
+        namingRule,
     },
     {
       role: "user",
@@ -561,7 +583,7 @@ export async function proposeTreeImprovements(
         `${scopeContext}\n\n` +
         `ALL topics already in the entire tree (do NOT duplicate any of these or anything semantically similar):\n${fullTreeTitles}\n\n` +
         `Scoped subtree to improve (parentId values must come from here):\n${outline}\n\n` +
-        `Suggest what is genuinely missing from "${focusLabel}". Be specific and concise.`,
+        `Suggest what is genuinely missing from "${focusLabel}". Distribute suggestions under the most specific relevant parent node, not all under the root.`,
     },
   ];
 
