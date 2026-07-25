@@ -647,7 +647,7 @@ export default function LearningTreePage() {
                       <span className="flex flex-col gap-0.5 min-w-0">
                         <span className="font-medium leading-snug">{p.title}</span>
                         <span className={`text-[10px] ${pChecked ? "text-brand-300/70" : "text-slate-500"}`}>
-                          📍 {p.parentTitle ? `under "${p.parentTitle}"` : "top level"}
+                          📍 {p.parentTitle ? `under "${p.parentTitle}"` : "at tree root"}
                         </span>
                       </span>
                     </button>

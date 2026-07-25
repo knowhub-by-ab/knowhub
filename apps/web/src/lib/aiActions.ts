@@ -428,6 +428,8 @@ export interface TreeProposal {
   parentTitle: string | null;
   title: string;
   children: string[];
+  /** True when the AI returned parentId=null, meaning "direct child of scope root". */
+  isAtScopeRoot?: boolean;
 }
 
 /** Propose missing topics — returns proposals WITHOUT applying them. User accepts/rejects each. */
@@ -497,6 +499,7 @@ export async function proposeTreeImprovements(
     if (startEntry2) focusLabel = startEntry2.node.title;
   }
 
+  // The scoped outline (with node IDs for parentId references)
   const outline = scopedNodes.length
     ? tree
         .flatten(scopedNodes)
@@ -504,45 +507,60 @@ export async function proposeTreeImprovements(
         .join("\n")
     : "(empty tree)";
 
-  // Build a breadcrumb path so the AI knows where in the overall tree we are
-  const scopeContext = scope?.startNodeId
-    ? (() => {
-        const entry = allFlat2.find((e) => e.node.id === scope.startNodeId);
-        if (!entry) return "";
-        // Walk up to build path
-        const pathParts: string[] = [entry.node.title];
-        let current = entry.node;
-        while (current.parentId) {
-          const parent = nodes.find((n) => n.id === current.parentId);
-          if (!parent) break;
-          pathParts.unshift(parent.title);
-          current = parent;
-        }
-        return `Focused scope: ${pathParts.join(" → ")}`;
-      })()
-    : `Focused scope: ${topic} (entire tree)`;
+  // The full tree — titles only, no IDs — so the AI can avoid duplicating
+  // topics that already exist outside the scoped area
+  const fullTreeTitles = allFlat2
+    .map(({ node }) => node.title)
+    .join(", ");
+
+  // Build breadcrumb so the AI knows exactly where in the tree the scope sits
+  const scopeContext = (() => {
+    const startId = scope?.startNodeId;
+    if (!startId) return `Scope: entire tree for "${topic}"`;
+    const entry = allFlat2.find((e) => e.node.id === startId);
+    if (!entry) return `Scope: "${topic}"`;
+    const pathParts: string[] = [entry.node.title];
+    let current = entry.node;
+    while (current.parentId) {
+      const parent = nodes.find((n) => n.id === current.parentId);
+      if (!parent) break;
+      pathParts.unshift(parent.title);
+      current = parent;
+    }
+    return `Scope: ${pathParts.join(" → ")}`;
+  })();
+
+  // The scope root is the node whose ID we treat as "top level" for null parentId
+  const scopeRootId = scope?.startNodeId ?? scope?.rootId ?? null;
+  const scopeRootTitle = scopeRootId
+    ? (nodes.find((n) => n.id === scopeRootId)?.title ?? focusLabel)
+    : focusLabel;
 
   const messages: ChatMessage[] = [
     {
       role: "system",
       content:
-        "You edit a learner's topic tree. Output ONLY JSON of this shape: " +
+        "You edit a learner's topic tree. Output ONLY JSON: " +
         '{"additions":[{"parentId": string|null, "title": string, "children"?: [{"title": string}]}]}. ' +
-        "CRITICAL RULES: " +
-        "1. Only suggest topics that are DIRECTLY and SPECIFICALLY relevant to the focused scope shown by the user — do NOT suggest generic career, soft-skill, or unrelated topics unless the scope itself is about those. " +
-        "2. Do NOT recreate or paraphrase topics that already exist in the tree. " +
-        "3. parentId MUST be one of the existing [id] values shown in the tree, or null only if the topic belongs at the very top level of the scoped subtree. " +
-        "4. Every suggestion must fit naturally as a child or sibling of the nodes shown.",
+        "RULES (violating any = bad output): " +
+        `1. Suggest ONLY topics specific to the scoped section — not generic topics unrelated to it. ` +
+        `2. Do NOT suggest anything already covered in the full tree (listed below). Check carefully before suggesting. ` +
+        `3. parentId must be an [id] from the scoped nodes below. Use null ONLY for direct children of the scope root ("${scopeRootTitle}"). ` +
+        "4. Aim for 3–6 precise, non-overlapping additions.",
     },
     {
       role: "user",
-      content: `${scopeContext}\n\nExisting nodes in scope:\n${outline}\n\nPropose ONLY topics that are missing from the "${focusLabel}" section specifically. Stay strictly within this scope.`,
+      content:
+        `${scopeContext}\n\n` +
+        `ALL topics already in the entire tree (do NOT duplicate any of these or anything semantically similar):\n${fullTreeTitles}\n\n` +
+        `Scoped subtree to improve (parentId values must come from here):\n${outline}\n\n` +
+        `Suggest what is genuinely missing from "${focusLabel}". Be specific and concise.`,
     },
   ];
 
   interface Addition { parentId?: string | null; title: string; children?: { title: string }[]; }
-  const data = await chatJSON<{ additions?: Addition[] }>(keys, messages, "tree");
-  const additions = data.additions ?? [];
+  const result = await chatJSON<{ additions?: Addition[] }>(keys, messages, "tree");
+  const additions = result.additions ?? [];
   if (!additions.length) throw new Error("No improvements suggested.");
 
   const nodeMap = new Map(nodes.map((n) => [n.id, n.title]));
@@ -551,12 +569,17 @@ export async function proposeTreeImprovements(
   return additions
     .filter((a) => a?.title)
     .map((a) => {
-      const pid = a.parentId && valid.has(a.parentId) ? a.parentId : null;
+      const aiReturnedNull = !a.parentId || !valid.has(a.parentId);
+      // When AI says parentId=null ("top of scope"), remap to the scope root so
+      // the node lands correctly instead of becoming a true tree root.
+      const effectivePid = aiReturnedNull ? (scopeRootId ?? null) : a.parentId!;
+      const resolvedPid = effectivePid && valid.has(effectivePid) ? effectivePid : null;
       return {
-        parentId: pid,
-        parentTitle: pid ? (nodeMap.get(pid) ?? null) : null,
+        parentId: resolvedPid,
+        parentTitle: resolvedPid ? (nodeMap.get(resolvedPid) ?? null) : null,
         title: String(a.title).slice(0, 120),
         children: (a.children ?? []).filter((c) => c?.title).map((c) => String(c.title).slice(0, 120)),
+        isAtScopeRoot: aiReturnedNull,
       };
     });
 }
