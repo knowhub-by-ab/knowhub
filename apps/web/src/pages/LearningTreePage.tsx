@@ -303,6 +303,10 @@ export default function LearningTreePage() {
   const [syllabusLoading, setSyllabusLoading] = useState(false);
   const [syllabusError, setSyllabusError] = useState<string | null>(null);
   const syllabusFileRef = useRef<HTMLInputElement>(null);
+  const jsonImportRef = useRef<HTMLInputElement>(null);
+  const [jsonImportParentId, setJsonImportParentId] = useState<string>("");
+  const [jsonImportError, setJsonImportError] = useState<string | null>(null);
+  const [jsonImportCount, setJsonImportCount] = useState<number | null>(null);
   const [treeMode, setTreeMode] = useState<"A" | "B">("A");
   const [treeModeB, setTreeModeB] = useState({ startLevel: "Beginner", topLevel: "Expert", style: "Normal explanation" });
   const LEVELS = ["Absolute Novice", "Beginner", "Intermediate", "Expert", "Advanced", "Professional", "Industry Standards"];
@@ -312,6 +316,45 @@ export default function LearningTreePage() {
   const [improveRootId, setImproveRootId] = useState<string>("");
   const [improveStartId, setImproveStartId] = useState<string>("");
   const [improveEndId, setImproveEndId] = useState<string>("");
+
+  async function handleJsonImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setJsonImportError(null);
+    setJsonImportCount(null);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      // Accept: array of nodes, single node object, or { tree: [...] } export format
+      let items: { title: string; children?: unknown[] }[];
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (parsed && typeof parsed === "object") {
+        // { tree: [...] } from our own export, or a single node { title, children }
+        if (Array.isArray(parsed.tree)) items = parsed.tree;
+        else if (Array.isArray(parsed.children)) items = [parsed];
+        else if (typeof parsed.title === "string") items = [parsed];
+        else throw new Error("JSON must be an array of nodes or a single node with a 'title' field.");
+      } else {
+        throw new Error("Invalid JSON format.");
+      }
+
+      // Count total nodes to be added
+      function countNodes(list: { title?: string; children?: unknown[] }[]): number {
+        return list.reduce((acc, n) => acc + 1 + (Array.isArray(n.children) ? countNodes(n.children as { title?: string; children?: unknown[] }[]) : 0), 0);
+      }
+      const total = countNodes(items);
+      if (total === 0) throw new Error("No nodes found in JSON.");
+
+      const parentId = jsonImportParentId || null;
+      tree.bulkAdd(items, parentId);
+      setJsonImportCount(total);
+    } catch (err) {
+      setJsonImportError(err instanceof Error ? err.message : "Failed to parse JSON.");
+    }
+  }
 
   function downloadTreeJson(rootId: string) {
     const rootNode = data.nodes.find((n) => n.id === rootId);
@@ -635,6 +678,52 @@ export default function LearningTreePage() {
                 <Download className="h-3.5 w-3.5" />
                 Download tree as JSON
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Import JSON panel */}
+        {!proposals && (
+          <div className="mt-3 rounded-xl border border-white/10 bg-slate-900/40 p-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-300">📥 Import tree from JSON</p>
+            <p className="text-xs text-slate-500">
+              Upload a <code className="rounded bg-slate-700 px-1 py-0.5 text-slate-300">.json</code> file with titles and children. Example format:
+            </p>
+            <pre className="rounded-lg bg-slate-800 p-2 text-[10px] text-slate-400 overflow-x-auto leading-relaxed">{`[
+  {
+    "title": "Machine Learning",
+    "children": [
+      {
+        "title": "1. Fundamentals",
+        "children": [
+          { "title": "1.1 Linear Algebra" },
+          { "title": "1.2 Statistics" }
+        ]
+      },
+      { "title": "2. Neural Networks", "children": [] }
+    ]
+  }
+]`}</pre>
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Add under node <span className="text-slate-500">(optional — leave blank to add at root)</span></label>
+              <CascadingNodePicker
+                nodes={data.nodes}
+                value={jsonImportParentId}
+                onChange={setJsonImportParentId}
+                placeholder="Root level"
+              />
+            </div>
+            <input ref={jsonImportRef} type="file" accept=".json" className="hidden" onChange={handleJsonImport} />
+            <button
+              onClick={() => { setJsonImportError(null); setJsonImportCount(null); jsonImportRef.current?.click(); }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Choose JSON file…
+            </button>
+            {jsonImportError && <p className="text-xs text-rose-400">{jsonImportError}</p>}
+            {jsonImportCount !== null && (
+              <p className="text-xs text-emerald-400">✓ Added {jsonImportCount} node{jsonImportCount !== 1 ? "s" : ""} to the tree.</p>
             )}
           </div>
         )}

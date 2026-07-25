@@ -297,6 +297,36 @@ export const tree = {
     return node;
   },
 
+  // Recursively insert a hierarchy of { title, children } nodes under parentId.
+  // All IDs are freshly generated; preserves order. Single setState call.
+  bulkAdd(items: { title: string; children?: unknown[] }[], parentId: string | null) {
+    const now = Date.now();
+    const newNodes: TreeNode[] = [];
+    const newCols: ContentCollection[] = [];
+
+    function walk(list: { title: string; children?: unknown[] }[], pid: string | null, orderOffset: number) {
+      list.forEach((item, i) => {
+        const id = uid();
+        const title = (item.title ?? "Untitled").trim() || "Untitled";
+        newNodes.push({ id, title, parentId: pid, status: "pending", order: orderOffset + i, createdAt: now });
+        newCols.push({ id, name: title, nodeId: id, createdAt: now });
+        if (Array.isArray(item.children) && item.children.length > 0) {
+          walk(item.children as { title: string; children?: unknown[] }[], id, 0);
+        }
+      });
+    }
+
+    setState((prev) => {
+      const siblingCount = prev.nodes.filter((n) => n.parentId === parentId).length;
+      walk(items, parentId, siblingCount);
+      return {
+        ...prev,
+        nodes: [...prev.nodes, ...newNodes],
+        contentCollections: [...prev.contentCollections, ...newCols],
+      };
+    });
+  },
+
   rename(id: string, title: string) {
     const resolved = title.trim() || "Untitled";
     setState((prev) => ({
